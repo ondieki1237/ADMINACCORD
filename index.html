@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ADMINACCORD - Admin Dashboard</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="admin-container">
+        <header class="admin-header">
+            <h1>ADMINACCORD</h1>
+            <p class="subtitle">Admin Dashboard for Accord Application</p>
+        </header>
+
+        <nav class="admin-nav">
+            <ul>
+                <li><a href="#dashboard" class="nav-link active">Dashboard</a></li>
+                <li><a href="#users" class="nav-link">Users</a></li>
+                <li><a href="#settings" class="nav-link">Settings</a></li>
+                <li><a href="#reports" class="nav-link">Reports</a></li>
+            </ul>
+        </nav>
+
+        <main class="admin-content">
+            <div class="content-section active" id="dashboard">
+                <h2>Dashboard Overview</h2>
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <h3>Total Users</h3>
+                        <p class="stat-number">1,234</p>
+                    </div>
+                    <div class="stat-card">
+                        <h3>Active Sessions</h3>
+                        <p class="stat-number">89</p>
+                    </div>
+                    <div class="stat-card">
+                        <h3>System Status</h3>
+                        <p class="stat-status online">Online</p>
+                    </div>
+                    <div class="stat-card">
+                        <h3>Uptime</h3>
+                        <p class="stat-number">99.9%</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="content-section" id="users">
+                <h2>User Management</h2>
+                <p>Manage users and their permissions.</p>
+                <div class="user-actions">
+                    <button class="btn btn-primary">Add User</button>
+                    <button class="btn btn-secondary">Export Users</button>
+                </div>
+            </div>
+
+            <div class="content-section" id="settings">
+                <h2>System Settings</h2>
+                <p>Configure system preferences and options.</p>
+                <div class="settings-form">
+                    <label>Site Name: <input type="text" value="Accord Application"></label>
+                    <label>Maintenance Mode: <input type="checkbox"></label>
+                    <button class="btn btn-primary">Save Settings</button>
+                </div>
+            </div>
+
+            <div class="content-section" id="reports">
+                <h2>Reports</h2>
+                <p>View system reports and analytics.</p>
+                <div class="report-actions">
+                    <button class="btn btn-primary">Generate Report</button>
+                    <button class="btn btn-secondary">Download CSV</button>
+                </div>
+            </div>
+        </main>
+
+        <footer class="admin-footer">
+            <p>&copy; 2025 ADMINACCORD - Made by Seth Makori</p>
+        </footer>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
