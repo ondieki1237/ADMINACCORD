@@ -22,7 +22,16 @@ export default function HospitalLayer() {
   useEffect(() => {
     fetch("/hospitals.json")
       .then((res) => res.json())
-      .then((data) => setGeojsonData(data))
+      .then((data) => {
+        // Filter out features where amenity is "pharmacy"
+        if (data && data.features) {
+          data.features = data.features.filter(
+            (feature: any) =>
+              feature.properties?.amenity?.toLowerCase() !== "pharmacy"
+          );
+        }
+        setGeojsonData(data);
+      })
       .catch((err) => console.error("Error loading hospital data:", err));
   }, []);
 

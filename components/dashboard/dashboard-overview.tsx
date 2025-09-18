@@ -13,7 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { BarChart3, Clock, MapPin, Shield, TrendingUp, Users } from "lucide-react";
+import { BarChart3, Clock, MapPin, Shield, TrendingUp, Users, FileText } from "lucide-react";
 import { Bar, Line } from "react-chartjs-2";
 import {
   Chart as ChartJS,
@@ -27,6 +27,7 @@ import {
   Legend,
   Filler,
 } from "chart.js";
+import QuotationList from "./quotations";
 
 // Register Chart.js components
 ChartJS.register(CategoryScale, LinearScale, BarElement, LineElement, PointElement, Title, Tooltip, Legend, Filler);
@@ -46,6 +47,7 @@ export function DashboardOverview() {
   const [currentUser, setCurrentUser] = useState(authService.getCurrentUserSync());
   const [totalVisits, setTotalVisits] = useState(0);
   const [averageDuration, setAverageDuration] = useState(0);
+  const [showQuotations, setShowQuotations] = useState(false);
   const { toast } = useToast();
 
   // Fetch user if not available
@@ -303,8 +305,33 @@ export function DashboardOverview() {
     );
   }
 
+  if (showQuotations) {
+    // Render the quotations page/component
+    return (
+      <div className="space-y-6">
+        <Button
+          variant="outline"
+          className="neumorphic-button mb-4 flex items-center gap-2"
+          onClick={() => setShowQuotations(false)}
+        >
+          ← Back to Dashboard
+        </Button>
+        <QuotationList />
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
+      {/* Quotations Button */}
+      <Button
+        variant="outline"
+        className="neumorphic-button mb-4 flex items-center gap-2"
+        onClick={() => setShowQuotations(true)}
+      >
+        <FileText className="h-4 w-4" />
+        Quotations
+      </Button>
       {/* Welcome Card */}
       {currentUser && (
         <Card className="neumorphic-card p-6 bg-gradient-to-r from-primary/10 to-primary/5">
