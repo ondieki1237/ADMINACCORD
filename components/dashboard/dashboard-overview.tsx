@@ -28,6 +28,7 @@ import {
   Filler,
 } from "chart.js";
 import QuotationList from "./quotations";
+import Reports from "./reports";
 
 // Register Chart.js components
 ChartJS.register(CategoryScale, LinearScale, BarElement, LineElement, PointElement, Title, Tooltip, Legend, Filler);
@@ -48,6 +49,7 @@ export function DashboardOverview() {
   const [totalVisits, setTotalVisits] = useState(0);
   const [averageDuration, setAverageDuration] = useState(0);
   const [showQuotations, setShowQuotations] = useState(false);
+  const [showReports, setShowReports] = useState(false);
   const { toast } = useToast();
 
   // Fetch user if not available
@@ -305,13 +307,29 @@ export function DashboardOverview() {
     );
   }
 
-  if (showQuotations) {
-    // Render the quotations page/component
+  // Show reports page if button is clicked
+  if (showReports) {
     return (
       <div className="space-y-6">
         <Button
           variant="outline"
-          className="neumorphic-button mb-4 flex items-center gap-2"
+          className="mb-4 flex items-center gap-2"
+          onClick={() => setShowReports(false)}
+        >
+          ← Back to Dashboard
+        </Button>
+        <Reports />
+      </div>
+    );
+  }
+
+  // Show quotations page if button is clicked
+  if (showQuotations) {
+    return (
+      <div className="space-y-6">
+        <Button
+          variant="outline"
+          className="mb-4 flex items-center gap-2"
           onClick={() => setShowQuotations(false)}
         >
           ← Back to Dashboard
@@ -323,10 +341,19 @@ export function DashboardOverview() {
 
   return (
     <div className="space-y-6">
+      {/* Reports Button */}
+      <Button
+        variant="outline"
+        className="mb-4 flex items-center gap-2"
+        onClick={() => setShowReports(true)}
+      >
+        <BarChart3 className="h-4 w-4" />
+        Reports
+      </Button>
       {/* Quotations Button */}
       <Button
         variant="outline"
-        className="neumorphic-button mb-4 flex items-center gap-2"
+        className="mb-4 flex items-center gap-2"
         onClick={() => setShowQuotations(true)}
       >
         <FileText className="h-4 w-4" />
