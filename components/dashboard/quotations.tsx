@@ -51,7 +51,7 @@ export default function QuotationList() {
       return;
     }
 
-    fetch("http://localhost:5000/api/quotation/all", {
+    fetch("https://accordbackend.onrender.com/api/quotation/all", {
       headers: { Authorization: `Bearer ${token}` },
     })
       .then((res) => {
@@ -88,7 +88,7 @@ export default function QuotationList() {
 
     setSubmitting(true);
     try {
-      const res = await fetch(`http://localhost:5000/api/quotation/respond/${selectedId}`, {
+      const res = await fetch(`https://accordbackend.onrender.com/api/quotation/respond/${selectedId}`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

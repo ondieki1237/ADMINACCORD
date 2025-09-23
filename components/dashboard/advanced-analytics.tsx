@@ -8,7 +8,7 @@ export default function AdvancedAnalytics() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    fetch("http://localhost:5000/api/dashboard/analytics", {
+    fetch("https://accordbackend.onrender.com/api/dashboard/analytics", {
       headers: {
         Authorization: localStorage.getItem("accessToken") ? `Bearer ${localStorage.getItem("accessToken")}` : ""
       }
