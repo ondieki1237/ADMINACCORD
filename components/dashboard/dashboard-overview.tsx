@@ -357,162 +357,176 @@ export function DashboardOverview() {
     );
   }
 
+  // Replace the previous return JSX with an improved modern layout + subtle animations
   return (
-    <div className="space-y-6">
-      {/* Reports Button */}
-      <Button
-        variant="outline"
-        className="mb-4 flex items-center gap-2"
-        onClick={() => setShowReports(true)}
-      >
-        <BarChart3 className="h-4 w-4" />
-        Reports
-      </Button>
+    <div className="space-y-6 px-6 py-8">
+      {/* Top toolbar */}
+      <div className="flex items-center justify-between gap-4">
+        <div className="flex items-center gap-4">
+          <div className="p-3 rounded-xl bg-gradient-to-r from-primary/20 to-primary/10 shadow-md">
+            <MapPin className="h-6 w-6 text-primary" />
+          </div>
+          <div>
+            <h1 className="text-2xl font-extrabold text-gray-900">Dashboard</h1>
+            <p className="text-sm text-gray-500">Live overview of visits, trails and sales activity</p>
+          </div>
+        </div>
 
-      {/* Visits Button */}
-      <Button
-        variant="outline"
-        className="mb-4 flex items-center gap-2"
-        onClick={() => setShowVisits(true)}
-      >
-        <Clock className="h-4 w-4" />
-        Visits
-      </Button>
-      
-      {/* Communications Button */}
-      <Button
-        variant="outline"
-        className="mb-4 flex items-center gap-2"
-        onClick={() => (window.location.href = "/dashboard/communications")}
-      >
-        <FileText className="h-4 w-4" />
-        Communications
-      </Button>
+        <div className="flex items-center gap-3">
+          <div className="hidden sm:flex items-center gap-2">
+            <Button
+              variant="ghost"
+              className="flex items-center gap-2 px-3 py-2 rounded-md transition transform hover:scale-105"
+              onClick={() => setShowReports(true)}
+            >
+              <BarChart3 className="h-4 w-4" />
+              Reports
+            </Button>
 
-      {/* Quotations Button */}
-      <Button
-        variant="outline"
-        className="mb-4 flex items-center gap-2"
-        onClick={() => setShowQuotations(true)}
-      >
-        <FileText className="h-4 w-4" />
-        Quotations
-      </Button>
+            <Button
+              variant="ghost"
+              className="flex items-center gap-2 px-3 py-2 rounded-md transition transform hover:scale-105"
+              onClick={() => setShowVisits(true)}
+            >
+              <Clock className="h-4 w-4" />
+              Visits
+            </Button>
 
-      {/* Welcome Card */}
-      {currentUser && (
-        <Card className="neumorphic-card p-6 bg-gradient-to-r from-primary/10 to-primary/5">
-          <CardHeader>
-            <CardTitle>Welcome back, {currentUser.firstName}!</CardTitle>
-            <CardDescription>
-              {currentUser.role.charAt(0).toUpperCase() + currentUser.role.slice(1)} • {currentUser.region} •{" "}
-              {currentUser.territory}
-            </CardDescription>
-          </CardHeader>
-        </Card>
-      )}
+            <Button
+              variant="ghost"
+              className="flex items-center gap-2 px-3 py-2 rounded-md transition transform hover:scale-105"
+              onClick={() => (window.location.href = "/dashboard/communications")}
+            >
+              <FileText className="h-4 w-4" />
+              Communications
+            </Button>
 
-      {/* Date Range Picker */}
-      <Card className="neumorphic-card">
-        <CardHeader>
-          <CardTitle>Date Range</CardTitle>
-          <CardDescription>Select a date range for the dashboard data</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button variant="outline" className="neumorphic-button">
-                {`${dateRange.startDate} - ${dateRange.endDate}`}
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-auto p-0">
-              <Calendar
-                mode="range"
-                selected={{
-                  from: new Date(dateRange.startDate),
-                  to: new Date(dateRange.endDate),
-                }}
-                onSelect={(range) => {
-                  if (range?.from && range?.to) {
-                    setDateRange({
-                      startDate: format(range.from, "yyyy-MM-dd"),
-                      endDate: format(range.to, "yyyy-MM-dd"),
-                    });
-                  }
-                }}
-              />
-            </PopoverContent>
-          </Popover>
-        </CardContent>
-      </Card>
+            <Button
+              variant="ghost"
+              className="flex items-center gap-2 px-3 py-2 rounded-md transition transform hover:scale-105"
+              onClick={() => setShowQuotations(true)}
+            >
+              <FileText className="h-4 w-4" />
+              Quotations
+            </Button>
+          </div>
 
-      {/* Stats Cards */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <StatsCard
-          title="Total Visits"
-          value={totalVisits}
-          description="This period"
-          icon={Users}
-          trend={{ value: 12, isPositive: true }}
-        />
-        <StatsCard
-          title="Total Trails"
-          value={totalTrails}
-          description={`Distance: ${totalTrailDistance.toFixed(2)} km`}
-          icon={MapPin}
-          trend={{ value: 8, isPositive: true }}
-        />
-        <StatsCard
-          title="Avg. Visit Duration"
-          value={`${Math.round(data?.performance.averageVisitDuration || 45)}m`}
-          description="Minutes per visit"
-          icon={Clock}
-          trend={{ value: 5, isPositive: true }}
-        />
-        <StatsCard
-          title="Completion Rate"
-          value={`${Math.round(data?.performance.completionRate || 85)}%`}
-          description="Tasks completed"
-          icon={TrendingUp}
-          trend={{ value: 3, isPositive: true }}
-        />
+          <Button
+            variant="outline"
+            className="ml-2 hidden sm:inline-flex"
+            onClick={() => window.location.reload()}
+            title="Refresh dashboard"
+          >
+            Refresh
+          </Button>
+        </div>
       </div>
 
-      {/* Performance Trends */}
-      <Card className="neumorphic-card">
-        <CardHeader>
-          <CardTitle>Performance Trends</CardTitle>
-          <CardDescription>Compare Visits and Trails productivity over time</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Line
-            data={performanceChartData}
-            options={{
-              responsive: true,
-              maintainAspectRatio: false,
-              plugins: {
-                legend: { display: true, position: "top" },
-                tooltip: { mode: "index", intersect: false },
-              },
-              interaction: { mode: "nearest", axis: "x", intersect: false },
-              scales: {
-                x: { title: { display: true, text: "Date" } },
-                y: { title: { display: true, text: "Count" }, beginAtZero: true },
-              },
-            }}
-            height={300}
-          />
-        </CardContent>
-      </Card>
-
-      {/* Sales Rep Heatmap Bar Chart */}
-      {hasAdminAccess(currentUser) && canViewHeatmap(currentUser) && salesHeatmap?.length > 0 && (
-        <Card className="neumorphic-card">
+      {/* Welcome + Summary */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
+        <Card className="col-span-1 lg:col-span-2 p-6 rounded-2xl shadow-lg transform transition duration-400 hover:-translate-y-1">
           <CardHeader>
-            <CardTitle>Sales Rep Heatmap</CardTitle>
-            <CardDescription>Activity count by sales reps and regions</CardDescription>
+            <CardTitle className="text-lg font-bold">
+              Welcome back{currentUser ? `, ${currentUser.firstName}` : ""}!
+            </CardTitle>
+            <CardDescription className="text-sm text-gray-500">
+              {currentUser ? `${currentUser.role.toUpperCase()} • ${currentUser.region}` : "Loading user..."}
+            </CardDescription>
           </CardHeader>
           <CardContent>
+            <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="bg-white/60 p-4 rounded-xl shadow-sm border border-gray-100 transition transform hover:scale-[1.02]">
+                <div className="text-xs font-semibold text-gray-500">Total Visits</div>
+                <div className="mt-2 text-2xl font-bold text-gray-900">{totalVisits}</div>
+                <div className="text-xs text-green-600 mt-1">This period</div>
+              </div>
+              <div className="bg-white/60 p-4 rounded-xl shadow-sm border border-gray-100 transition transform hover:scale-[1.02]">
+                <div className="text-xs font-semibold text-gray-500">Total Trails</div>
+                <div className="mt-2 text-2xl font-bold text-gray-900">{totalTrails}</div>
+                <div className="text-xs text-gray-500 mt-1">Distance: {totalTrailDistance.toFixed(2)} km</div>
+              </div>
+              <div className="bg-white/60 p-4 rounded-xl shadow-sm border border-gray-100 transition transform hover:scale-[1.02]">
+                <div className="text-xs font-semibold text-gray-500">Avg Visit Duration</div>
+                <div className="mt-2 text-2xl font-bold text-gray-900">{averageDuration}m</div>
+                <div className="text-xs text-gray-500 mt-1">Per visit</div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="p-4 rounded-2xl shadow-lg h-full transform transition duration-400 hover:-translate-y-1">
+          <CardHeader>
+            <CardTitle className="text-sm font-semibold">Quick Actions</CardTitle>
+            <CardDescription className="text-xs text-gray-500">Admin tools & shortcuts</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="flex flex-col gap-3">
+              {canViewHeatmap(currentUser) && (
+                <Button
+                  variant="outline"
+                  className="w-full justify-start gap-2 transition transform hover:scale-105"
+                  onClick={() => (window.location.href = "/dashboard/sales-heatmap")}
+                >
+                  <BarChart3 className="h-4 w-4" />
+                  View Heatmap
+                </Button>
+              )}
+              <Button
+                variant="outline"
+                className="w-full justify-start gap-2 transition transform hover:scale-105"
+                onClick={() => (window.location.href = "/dashboard/user-manager")}
+              >
+                <Users className="h-4 w-4" />
+                Manage Users
+              </Button>
+              <Button
+                variant="outline"
+                className="w-full justify-start gap-2 transition transform hover:scale-105"
+                onClick={() => (window.location.href = "/dashboard/advanced-analytics")}
+              >
+                <TrendingUp className="h-4 w-4" />
+                Advanced Analytics
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Charts area */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <Card className="col-span-2 p-4 rounded-2xl shadow-md transition transform hover:scale-[1.01]">
+          <CardHeader>
+            <CardTitle>Performance Trends</CardTitle>
+            <CardDescription>Visits vs Trails over time</CardDescription>
+          </CardHeader>
+          <CardContent className="h-72">
+            <div className="h-full w-full transition-opacity duration-500">
+              <Line
+                data={performanceChartData}
+                options={{
+                  responsive: true,
+                  maintainAspectRatio: false,
+                  plugins: {
+                    legend: { display: true, position: "top" },
+                    tooltip: { mode: "index", intersect: false },
+                  },
+                  interaction: { mode: "nearest", axis: "x", intersect: false },
+                  scales: {
+                    x: { title: { display: true, text: "Date" } },
+                    y: { title: { display: true, text: "Count" }, beginAtZero: true },
+                  },
+                }}
+              />
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="p-4 rounded-2xl shadow-md transition transform hover:scale-[1.01]">
+          <CardHeader>
+            <CardTitle>Sales Rep Activity</CardTitle>
+            <CardDescription>Top performers</CardDescription>
+          </CardHeader>
+          <CardContent className="h-72">
             <Bar
               data={salesHeatmapChartData}
               options={{
@@ -526,61 +540,85 @@ export function DashboardOverview() {
                   y: { title: { display: true, text: "Count" }, beginAtZero: true },
                 },
               }}
-              height={300}
             />
           </CardContent>
         </Card>
-      )}
+      </div>
 
-      {/* Admin Features */}
-      {hasAdminAccess(currentUser) && (
-        <Card className="neumorphic-card">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Shield className="h-5 w-5" />
-              Admin Features
-            </CardTitle>
-            <CardDescription>Super user tools and analytics</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-              {canViewHeatmap(currentUser) && (
-                <Button
-                  variant="outline"
-                  className="neumorphic-button flex items-center gap-2 bg-transparent"
-                  onClick={() => window.location.href = "/dashboard/sales-heatmap"}
-                >
-                  <BarChart3 className="h-4 w-4" />
-                  View Heatmap
-                </Button>
-              )}
-              <Button
-                variant="outline"
-                className="neumorphic-button flex items-center gap-2 bg-transparent"
-                onClick={() => window.location.href = "/dashboard/user-manager"}
-              >
-                <Users className="h-4 w-4" />
-                Manage Users
-              </Button>
-              <Button
-                variant="outline"
-                className="neumorphic-button flex items-center gap-2 bg-transparent"
-                onClick={() => window.location.href = "/dashboard/advanced-analytics"}
-              >
-                <TrendingUp className="h-4 w-4" />
-                Advanced Analytics
-              </Button>
-              <Button variant="outline" className="neumorphic-button flex items-center gap-2 bg-transparent">
-                <TrendingUp className="h-4 w-4" />
-                Export Report
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      )}
+      {/* Admin cards + Recent activity */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="lg:col-span-2 space-y-6">
+          {hasAdminAccess(currentUser) && (
+            <Card className="p-4 rounded-2xl shadow-md transition transform hover:-translate-y-1">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Shield className="h-4 w-4" />
+                  Admin Features
+                </CardTitle>
+                <CardDescription>Super user tools and analytics</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  <Button variant="ghost" className="flex-col items-start gap-2 p-3 rounded-lg transition hover:bg-gray-50">
+                    <Users className="h-5 w-5" />
+                    <div className="text-xs">Manage Users</div>
+                  </Button>
+                  <Button variant="ghost" className="flex-col items-start gap-2 p-3 rounded-lg transition hover:bg-gray-50">
+                    <TrendingUp className="h-5 w-5" />
+                    <div className="text-xs">Analytics</div>
+                  </Button>
+                  <Button variant="ghost" className="flex-col items-start gap-2 p-3 rounded-lg transition hover:bg-gray-50">
+                    <FileText className="h-5 w-5" />
+                    <div className="text-xs">Reports</div>
+                  </Button>
+                  <Button variant="ghost" className="flex-col items-start gap-2 p-3 rounded-lg transition hover:bg-gray-50">
+                    <MapPin className="h-5 w-5" />
+                    <div className="text-xs">Heatmap</div>
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
-      {/* Recent Activity */}
-      <RecentActivity activities={transformedActivity} />
+          <RecentActivity activities={transformedActivity} />
+        </div>
+
+        <div className="space-y-6">
+          <Card className="p-4 rounded-2xl shadow-md transition transform hover:scale-[1.01]">
+            <CardHeader>
+              <CardTitle>Summary</CardTitle>
+              <CardDescription>Key metrics at a glance</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="text-sm text-gray-500">Completion</div>
+                <div className="text-sm font-semibold">{Math.round(data?.performance.completionRate || 0)}%</div>
+
+                <div className="text-sm text-gray-500">Avg Visit</div>
+                <div className="text-sm font-semibold">{Math.round(data?.performance.averageVisitDuration || 0)}m</div>
+
+                <div className="text-sm text-gray-500">Trails This Month</div>
+                <div className="text-sm font-semibold">{data?.performance.trailsThisMonth ?? 0}</div>
+
+                <div className="text-sm text-gray-500">Visits This Month</div>
+                <div className="text-sm font-semibold">{data?.performance.visitsThisMonth ?? 0}</div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="p-4 rounded-2xl shadow-md">
+            <CardHeader>
+              <CardTitle>Heatmap Insight</CardTitle>
+              <CardDescription>Activity intensity</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="h-40 flex items-center justify-center text-sm text-gray-500">
+                {data?.heatmap ? "Heatmap data ready" : "No heatmap data"}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
     </div>
   );
 }
