@@ -69,7 +69,7 @@ export function DashboardOverview() {
     const fetchVisits = async () => {
       try {
         const token = localStorage.getItem("accessToken")
-        const res = await fetch("http://localhost:5000/api/visits", {
+        const res = await fetch("https://accordbackend.onrender.com/api/visits", {
           headers: {
             "Content-Type": "application/json",
             ...(token ? { Authorization: `Bearer ${token}` } : {})
@@ -112,7 +112,7 @@ export function DashboardOverview() {
           apiService.getDashboardOverview(dateRange.startDate, dateRange.endDate, currentUser?.region || "North"),
           apiService.getRecentActivity(20),
           apiService.getPerformanceMetrics(dateRange.startDate, dateRange.endDate, currentUser?.region || "North"),
-          fetch("http://localhost:5000/api/visits", {
+          fetch("https://accordbackend.onrender.com/api/visits", {
             headers: {
               "Content-Type": "application/json",
               ...(token ? { Authorization: `Bearer ${token}` } : {})
@@ -160,7 +160,7 @@ export function DashboardOverview() {
     queryFn: async () => {
       const token = localStorage.getItem("accessToken");
       const region = currentUser?.region || "North";
-      const url = `http://localhost:5000/api/dashboard/performance?startDate=${dateRange.startDate}&endDate=${dateRange.endDate}&region=${region}`;
+      const url = `https://accordbackend.onrender.com/api/dashboard/performance?startDate=${dateRange.startDate}&endDate=${dateRange.endDate}&region=${region}`;
       const res = await fetch(url, {
         headers: {
           Authorization: token ? `Bearer ${token}` : ""
@@ -195,7 +195,7 @@ export function DashboardOverview() {
     queryKey: ["allTrails"],
     queryFn: async () => {
       const token = localStorage.getItem("accessToken");
-      const res = await fetch("http://localhost:5000/api/dashboard/all-trails", {
+      const res = await fetch("https://accordbackend.onrender.com/api/dashboard/all-trails", {
         headers: {
           "Content-Type": "application/json",
           ...(token ? { Authorization: `Bearer ${token}` } : {})
