@@ -106,5 +106,5 @@ npm start
 
 - Chrome/Edge 88+
 - Safari 14+
-- Firefox 85+
+- Firefox 86+
 - Mobile browsers with PWA support
