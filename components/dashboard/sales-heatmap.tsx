@@ -22,7 +22,6 @@ function trailDistance(path: TrailPoint[]): number {
   }
   return dist;
 }
-
 // Color palette for polylines
 const COLORS = [
   '#2563eb', // blue-600
@@ -34,8 +33,21 @@ const COLORS = [
   '#0ea5e9', // sky-500
   '#eab308', // amber-500
 ];
+import React, { useState, useEffect, useRef } from 'react';
+import { MapContainer, TileLayer, Polyline, Marker, Popup, useMap } from 'react-leaflet';
+import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
+import 'leaflet.heat';
+import { RefreshCw, MapPin, Activity } from 'lucide-react';
+import HospitalLayer from "./HospitalLayer";
 
-// Import types and components
+// Extend the Leaflet Map type to include heatLayer
+declare module 'leaflet' {
+  interface Map {
+    heatLayer?: any;
+  }
+}
+
 interface TrailPoint {
   lat: number;
   lng: number;
@@ -58,188 +70,54 @@ interface ApiResponse {
   data: Trail[];
 }
 
-interface HeatmapPoint {
-  lat: number;
-  lng: number;
-  intensity: number;
-}
+// Component to handle heatmap layer
+const HeatmapLayer: React.FC<{ data: HeatmapPoint[] }> = ({ data }) => {
+  const map = useMap();
 
-// Dynamic import for the map component to avoid SSR issues
-const MapWithHeatmap: React.FC<{ 
-  trails: Trail[], 
-  selectedUserId: string | null,
-  showHospitals: boolean,
-  locationIcon: L.Icon
-}> = ({ trails, selectedUserId, showHospitals, locationIcon }) => {
-  const [MapContainer, setMapContainer] = React.useState<any>(null);
-  const [TileLayer, setTileLayer] = React.useState<any>(null);
-  const [Polyline, setPolyline] = React.useState<any>(null);
-  const [Marker, setMarker] = React.useState<any>(null);
-  const [Popup, setPopup] = React.useState<any>(null);
-  const [useMap, setUseMap] = React.useState<any>(null);
-  const [L, setL] = React.useState<any>(null);
-  const [HospitalLayer, setHospitalLayer] = React.useState<any>(null);
-  const [mounted, setMounted] = React.useState(false);
+  useEffect(() => {
+    if (map.heatLayer) {
+      map.removeLayer(map.heatLayer);
+    }
 
-  React.useEffect(() => {
-    // Dynamically import all Leaflet components
-    const loadLeafletComponents = async () => {
-      const leaflet = await import('leaflet');
-      const reactLeaflet = await import('react-leaflet');
-      const hospitalLayer = await import('./HospitalLayer');
-      
-      setL(leaflet);
-      setMapContainer(() => reactLeaflet.MapContainer);
-      setTileLayer(() => reactLeaflet.TileLayer);
-      setPolyline(() => reactLeaflet.Polyline);
-      setMarker(() => reactLeaflet.Marker);
-      setPopup(() => reactLeaflet.Popup);
-      setUseMap(() => reactLeaflet.useMap);
-      setHospitalLayer(() => hospitalLayer.default);
-      
-      setMounted(true);
-    };
+    if (data.length > 0) {
+      const heatPoints = data.map(point => [point.lat, point.lng, point.intensity]);
 
-    loadLeafletComponents();
-  }, []);
-
-  const HeatmapLayerComponent: React.FC<{ data: HeatmapPoint[] }> = ({ data }) => {
-    const map = useMap();
-
-    React.useEffect(() => {
-      if (!map || !L || !mounted) return;
-
-      // Clean up existing heatmap
-      if ((map as any).heatLayer) {
-        map.removeLayer((map as any).heatLayer);
-        (map as any).heatLayer = undefined;
-      }
-
-      if (data.length > 0) {
-        // Dynamically import leaflet.heat
-        import('leaflet.heat').then((leafletHeat) => {
-          const heatPoints = data.map(point => [point.lat, point.lng, point.intensity]);
-
-          const heatLayer = leafletHeat.default(heatPoints, {
-            radius: 25,
-            blur: 15,
-            maxZoom: 12,
-            gradient: {
-              0.0: '#3B82F6',
-              0.2: '#10B981',
-              0.4: '#F59E0B',
-              0.6: '#EF4444',
-              0.8: '#DC2626',
-              1.0: '#991B1B'
-            }
-          });
-
-          heatLayer.addTo(map);
-          (map as any).heatLayer = heatLayer;
-        });
-      }
-
-      return () => {
-        if ((map as any).heatLayer) {
-          map.removeLayer((map as any).heatLayer);
-          (map as any).heatLayer = undefined;
+      const heatLayer = (L as any).heatLayer(heatPoints, {
+        radius: 25,
+        blur: 15,
+        maxZoom: 12,
+        gradient: {
+          0.0: '#3B82F6',
+          0.2: '#10B981',
+          0.4: '#F59E0B',
+          0.6: '#EF4444',
+          0.8: '#DC2626',
+          1.0: '#991B1B'
         }
-      };
-    }, [data, map, L, mounted]);
+      });
 
-    return null;
-  };
+      heatLayer.addTo(map);
+      map.heatLayer = heatLayer;
+    }
 
-  if (!mounted || !MapContainer || !TileLayer || !L) {
-    return (
-      <div className="h-full w-full flex items-center justify-center bg-gray-100">
-        <div className="text-gray-500">Loading map...</div>
-      </div>
-    );
-  }
+    return () => {
+      if (map.heatLayer) {
+        map.removeLayer(map.heatLayer);
+        map.heatLayer = undefined;
+      }
+    };
+  }, [data, map]);
 
-  const filteredTrails = selectedUserId 
-    ? trails.filter(trail => trail.user.id === selectedUserId) 
-    : trails;
-
-  const userList = trails.map(trail => trail.user);
-
-  return (
-    <MapContainer 
-      center={[-1.286389, 36.817223]} 
-      zoom={7} 
-      className="h-full w-full"
-    >
-      <TileLayer
-        attribution='&copy; OpenStreetMap contributors'
-        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-      />
-
-      {/* Hospital locations */}
-      {showHospitals && <HospitalLayer />}
-
-      {/* Heatmap Layer */}
-      <HeatmapLayerComponent
-        data={trails.flatMap(trail =>
-          trail.path.map(pt => ({
-            lat: pt.lat,
-            lng: pt.lng,
-            intensity: 1
-          }))
-        )}
-      />
-
-      {/* Trails */}
-      {filteredTrails.map((trail) => {
-        const userIdx = userList.findIndex(u => u.id === trail.user.id);
-        const color = COLORS[userIdx % COLORS.length];
-        return (
-          <React.Fragment key={trail.user.id}>
-            {/* Draw trail as connected segments */}
-            {trail.path.map((pt, i) => {
-              if (i < trail.path.length - 1) {
-                const nextPt = trail.path[i + 1];
-                return (
-                  <Polyline
-                    key={`${trail.user.id}-seg-${i}`}
-                    positions={[
-                      [pt.lat, pt.lng], // Fixed: lat first, then lng
-                      [nextPt.lat, nextPt.lng] // Fixed: lat first, then lng
-                    ]}
-                    pathOptions={{
-                      color,
-                      weight: 3,
-                      opacity: 0.7
-                    }}
-                  />
-                );
-              }
-              return null;
-            })}
-
-            {/* Markers for every point */}
-            {trail.path.map((pt, i) => (
-              <Marker key={`${trail.user.id}-pt-${i}`} position={[pt.lat, pt.lng]} icon={locationIcon}>
-                <Popup>
-                  <div>
-                    <strong>{trail.user.name}</strong><br />
-                    Employee ID: {trail.user.employeeId}<br />
-                    Region: {trail.user.region}<br />
-                    Point #{i + 1}: [{pt.lat.toFixed(6)}, {pt.lng.toFixed(6)}]
-                  </div>
-                </Popup>
-              </Marker>
-            ))}
-          </React.Fragment>
-        );
-      })}
-    </MapContainer>
-  );
+  return null;
 };
 
 const HeatmapDashboard: React.FC = () => {
   const [trails, setTrails] = useState<Trail[]>([]);
+  // For demo: simulate owner/userId per point (replace with real user data if available)
+  // For selection
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
+  const userList = trails.map(trail => trail.user);
+  const filteredTrails = selectedUserId ? trails.filter(trail => trail.user.id === selectedUserId) : trails;
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
@@ -256,29 +134,47 @@ const HeatmapDashboard: React.FC = () => {
   const fetchHeatmapData = async () => {
     try {
       setError(null);
-      const response = await fetch('https://accordbackend.onrender.com/api/dashboard/heatmap/live', {
-        headers: {
-          'Authorization': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjY4YzE4ODIxOWI4ZmVmOTAxNjQwMTJhOCIsImlhdCI6MTc1NzgyNTYzMywiZXhwIjoxNzU4NDMwNDMzfQ.SfDFRZOclIkmuLLcx1Sa2JjT8vIyaoMI86H0rOdCIoQ'
-        }
-      });
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+
+      const token = localStorage.getItem("accessToken");
+      if (!token) {
+        setError("No auth token found in localStorage (accessToken). Please log in.");
+        setLoading(false);
+        return;
       }
-      const result: ApiResponse = await response.json();
-      if (result.success) {
+
+      const res = await fetch("https://accordbackend.onrender.com/api/dashboard/heatmap/live", {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: "application/json",
+        },
+      });
+
+      if (!res.ok) {
+        const body = await res.text();
+        if (res.status === 401) {
+          // invalid/expired token — clear and inform user
+          setError("Authentication failed. Please log in again.");
+          localStorage.removeItem("accessToken");
+          return;
+        }
+        throw new Error(`Server returned ${res.status}: ${body || res.statusText}`);
+      }
+
+      const result: ApiResponse = await res.json();
+      if (result.success && Array.isArray(result.data)) {
         setTrails(result.data);
         setLastUpdated(new Date());
       } else {
-        throw new Error('API returned unsuccessful response');
+        throw new Error("API returned unsuccessful response or unexpected shape");
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to fetch heatmap data');
-      console.error('Error fetching heatmap data:', err);
+      setError(err instanceof Error ? err.message : "Failed to fetch heatmap data");
+      console.error("Error fetching heatmap data:", err);
     } finally {
       setLoading(false);
     }
   };
-
+  
   useEffect(() => {
     fetchHeatmapData();
   }, []);
@@ -304,23 +200,12 @@ const HeatmapDashboard: React.FC = () => {
   };
 
   // Custom icon using a location pin
-  const [locationIcon, setLocationIcon] = useState<L.Icon | null>(null);
-
-  useEffect(() => {
-    // Create icon after mount to avoid SSR issues
-    import('leaflet').then((L) => {
-      const icon = new L.Icon({
-        iconUrl: "https://cdn-icons-png.flaticon.com/512/684/684908.png",
-        iconSize: [30, 30],
-        iconAnchor: [15, 30],
-        popupAnchor: [0, -28]
-      });
-      setLocationIcon(icon);
-    });
-  }, []);
-
-  const userList = trails.map(trail => trail.user);
-  const filteredTrails = selectedUserId ? trails.filter(trail => trail.user.id === selectedUserId) : trails;
+  const locationIcon = new L.Icon({
+    iconUrl: "https://cdn-icons-png.flaticon.com/512/684/684908.png", // location icon
+    iconSize: [30, 30],   // size of the icon
+    iconAnchor: [15, 30], // point of the icon that corresponds to marker's location
+    popupAnchor: [0, -28] // popup position relative to the icon
+  });
 
   return (
     <div className="min-h-screen bg-gray-50 flex">
@@ -366,7 +251,7 @@ const HeatmapDashboard: React.FC = () => {
             {filteredTrails.map(trail => (
               trail.path.map((pt, i) => (
                 <li key={trail.user.id + '-' + i} className="mb-1">
-                  <span className="font-mono">[{pt.lat.toFixed(6)}, {pt.lng.toFixed(6)}]</span>
+                  <span className="font-mono">[{pt.lat}, {pt.lng}]</span>
                   <span className="ml-2 text-gray-400">({trail.user.name})</span>
                 </li>
               ))
@@ -449,15 +334,79 @@ const HeatmapDashboard: React.FC = () => {
             </div>
           )}
 
-          {locationIcon && (
-            <MapWithHeatmap
-              trails={trails}
-              selectedUserId={selectedUserId}
-              showHospitals={showHospitals}
-              locationIcon={locationIcon}
+          {/*
+          // To debug bounds issues, you can temporarily use center/zoom instead of bounds:
+          // <MapContainer center={[-1.286389, 36.817223]} zoom={7} className="h-full w-full">
+          */}
+          {/* Temporarily use center/zoom for debugging polyline visibility */}
+          <MapContainer center={[-1.286389, 36.817223]} zoom={7} className="h-full w-full">
+            <TileLayer
+              attribution='&copy; OpenStreetMap contributors'
+              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
             />
-          )}
-          
+
+            {/* Hospital locations */}
+            {showHospitals && <HospitalLayer />}
+
+            {/* Heatmap Layer */}
+            <HeatmapLayer
+              data={trails.flatMap(trail =>
+                trail.path.map(pt => ({
+                  lat: pt.lat,
+                  lng: pt.lng,
+                  intensity: 1
+                }))
+              )}
+            />
+
+            {/* Trails */}
+            {(selectedUserId
+              ? trails.filter(trail => trail.user.id === selectedUserId)
+              : trails
+            ).map((trail) => {
+              const userIdx = userList.findIndex(u => u.id === trail.user.id);
+              const color = COLORS[userIdx % COLORS.length];
+              return (
+                <React.Fragment key={trail.user.id}>
+                  {/* Draw trail as connected segments */}
+                  {trail.path.map((pt, i) => {
+                    if (i < trail.path.length - 1) {
+                      const nextPt = trail.path[i + 1];
+                      return (
+                        <Polyline
+                          key={`${trail.user.id}-seg-${i}`}
+                          positions={[
+                            [pt.lng, pt.lat], // swap
+                            [nextPt.lng, nextPt.lat] // swap
+                          ]}
+                          pathOptions={{
+                            color,
+                            weight: 3,
+                            opacity: 0.7
+                          }}
+                        />
+                      );
+                    }
+                    return null;
+                  })}
+
+                  {/* Markers for every point */}
+                  {trail.path.map((pt, i) => (
+                    <Marker key={`${trail.user.id}-pt-${i}`} position={[pt.lat, pt.lng]} icon={locationIcon}>
+                      <Popup>
+                        <div>
+                          <strong>{trail.user.name}</strong><br />
+                          Employee ID: {trail.user.employeeId}<br />
+                          Region: {trail.user.region}<br />
+                          Point #{i + 1}: [{pt.lat}, {pt.lng}]
+                        </div>
+                      </Popup>
+                    </Marker>
+                  ))}
+                </React.Fragment>
+              );
+            })}
+          </MapContainer>
           {/* Legend */}
           <div className="absolute bottom-4 left-4 bg-white p-4 rounded-lg shadow-lg z-[1000]">
             <h3 className="text-sm font-semibold text-gray-900 mb-2">Activity Intensity</h3>
