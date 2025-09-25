@@ -29,6 +29,7 @@ import {
 } from "chart.js";
 import QuotationList from "./quotations";
 import Reports from "./reports";
+import VisitsPage from "./visitmanager";
 
 // Register Chart.js components
 ChartJS.register(CategoryScale, LinearScale, BarElement, LineElement, PointElement, Title, Tooltip, Legend, Filler);
@@ -50,6 +51,7 @@ export function DashboardOverview() {
   const [averageDuration, setAverageDuration] = useState(0);
   const [showQuotations, setShowQuotations] = useState(false);
   const [showReports, setShowReports] = useState(false);
+  const [showVisits, setShowVisits] = useState(false);
   const { toast } = useToast();
 
   // Fetch user if not available
@@ -323,6 +325,22 @@ export function DashboardOverview() {
     );
   }
 
+  // Show visits page if button is clicked
+  if (showVisits) {
+    return (
+      <div className="space-y-6">
+        <Button
+          variant="outline"
+          className="mb-4 flex items-center gap-2"
+          onClick={() => setShowVisits(false)}
+        >
+          ← Back to Dashboard
+        </Button>
+        <VisitsPage />
+      </div>
+    );
+  }
+
   // Show quotations page if button is clicked
   if (showQuotations) {
     return (
@@ -350,6 +368,27 @@ export function DashboardOverview() {
         <BarChart3 className="h-4 w-4" />
         Reports
       </Button>
+
+      {/* Visits Button */}
+      <Button
+        variant="outline"
+        className="mb-4 flex items-center gap-2"
+        onClick={() => setShowVisits(true)}
+      >
+        <Clock className="h-4 w-4" />
+        Visits
+      </Button>
+      
+      {/* Communications Button */}
+      <Button
+        variant="outline"
+        className="mb-4 flex items-center gap-2"
+        onClick={() => (window.location.href = "/dashboard/communications")}
+      >
+        <FileText className="h-4 w-4" />
+        Communications
+      </Button>
+
       {/* Quotations Button */}
       <Button
         variant="outline"
@@ -359,6 +398,7 @@ export function DashboardOverview() {
         <FileText className="h-4 w-4" />
         Quotations
       </Button>
+
       {/* Welcome Card */}
       {currentUser && (
         <Card className="neumorphic-card p-6 bg-gradient-to-r from-primary/10 to-primary/5">
