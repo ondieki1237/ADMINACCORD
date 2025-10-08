@@ -29,6 +29,7 @@ import {
 } from "chart.js";
 import QuotationList from "./quotations";
 import Reports from "./reports";
+import EngineerReports from "./engineer-reports";
 import VisitsPage from "./visitmanager";
 
 // Register Chart.js components
@@ -50,6 +51,7 @@ export function DashboardOverview() {
   const [totalVisits, setTotalVisits] = useState(0);
   const [averageDuration, setAverageDuration] = useState(0);
   const [showQuotations, setShowQuotations] = useState(false);
+  const [showEngineerReports, setShowEngineerReports] = useState(false);
   const [showReports, setShowReports] = useState(false);
   const [showVisits, setShowVisits] = useState(false);
   const { toast } = useToast();
@@ -69,7 +71,7 @@ export function DashboardOverview() {
     const fetchVisits = async () => {
       try {
         const token = localStorage.getItem("accessToken")
-        const res = await fetch("https://accordbackend.onrender.com/api/visits", {
+        const res = await fetch("http://localhost:5000/api/visits", {
           headers: {
             "Content-Type": "application/json",
             ...(token ? { Authorization: `Bearer ${token}` } : {})
@@ -112,7 +114,7 @@ export function DashboardOverview() {
           apiService.getDashboardOverview(dateRange.startDate, dateRange.endDate, currentUser?.region || "North"),
           apiService.getRecentActivity(20),
           apiService.getPerformanceMetrics(dateRange.startDate, dateRange.endDate, currentUser?.region || "North"),
-          fetch("https://accordbackend.onrender.com/api/visits", {
+          fetch("http://localhost:5000/api/visits", {
             headers: {
               "Content-Type": "application/json",
               ...(token ? { Authorization: `Bearer ${token}` } : {})
@@ -160,7 +162,7 @@ export function DashboardOverview() {
     queryFn: async () => {
       const token = localStorage.getItem("accessToken");
       const region = currentUser?.region || "North";
-      const url = `https://accordbackend.onrender.com/api/dashboard/performance?startDate=${dateRange.startDate}&endDate=${dateRange.endDate}&region=${region}`;
+      const url = `http://localhost:5000/api/dashboard/performance?startDate=${dateRange.startDate}&endDate=${dateRange.endDate}&region=${region}`;
       const res = await fetch(url, {
         headers: {
           Authorization: token ? `Bearer ${token}` : ""
@@ -195,7 +197,7 @@ export function DashboardOverview() {
     queryKey: ["allTrails"],
     queryFn: async () => {
       const token = localStorage.getItem("accessToken");
-      const res = await fetch("https://accordbackend.onrender.com/api/dashboard/all-trails", {
+      const res = await fetch("http://localhost:5000/api/dashboard/all-trails", {
         headers: {
           "Content-Type": "application/json",
           ...(token ? { Authorization: `Bearer ${token}` } : {})
@@ -357,6 +359,25 @@ export function DashboardOverview() {
     );
   }
 
+  if (showEngineerReports) {
+    return (
+      <div className="space-y-6">
+        <Button
+          variant="outline"
+          className="mb-4 flex items-center gap-2"
+          onClick={() => setShowEngineerReports(false)}
+        >
+          ← Back to Dashboard
+        </Button>
+        {/* lazy load EngineerReports component */}
+        <React.Suspense fallback={<div className="p-4">Loading engineer reports...</div>}>
+          {/* @ts-ignore Server/Client boundary: component is client */}
+          <EngineerReports />
+        </React.Suspense>
+      </div>
+    );
+  }
+
   // Replace the previous return JSX with an improved modern layout + subtle animations
   return (
     <div className="space-y-6 px-6 py-8">
@@ -408,6 +429,14 @@ export function DashboardOverview() {
             >
               <FileText className="h-4 w-4" />
               Quotations
+            </Button>
+            <Button
+              variant="ghost"
+              className="flex items-center gap-2 px-3 py-2 rounded-md transition transform hover:scale-105"
+              onClick={() => setShowEngineerReports(true)}
+            >
+              <FileText className="h-4 w-4" />
+              Engineer Reports
             </Button>
           </div>
 

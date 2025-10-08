@@ -44,7 +44,7 @@ export default function Reports() {
         return;
       }
 
-      const res = await fetch("https://accordbackend.onrender.com/api/reports", {
+      const res = await fetch("http://localhost:5000/api/reports", {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -84,7 +84,7 @@ export default function Reports() {
 
     setUpdatingId(reportId);
     try {
-      const res = await fetch(`https://accordbackend.onrender.com/api/reports/${reportId}/status`, {
+      const res = await fetch(`http://localhost:5000/api/reports/${reportId}/status`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
@@ -133,7 +133,7 @@ export default function Reports() {
     try {
       // ask server to return the final download URL (server will validate token)
       const res = await fetch(
-        `https://accordbackend.onrender.com/api/reports/${report._id}/download?raw=true`,
+        `http://localhost:5000/api/reports/${report._id}/download?raw=true`,
         {
           headers: {
             Authorization: `Bearer ${token}`,
@@ -232,7 +232,7 @@ export default function Reports() {
                       <Button
                         size="sm"
                         variant="outline"
-                        onClick={() => window.open(viewUrl ?? `https://accordbackend.onrender.com/api/reports/${report._id}/download`, "_blank")}
+                        onClick={() => window.open(viewUrl ?? `http://localhost:5000/api/reports/${report._id}/download`, "_blank")}
                       >
                         Open
                       </Button>

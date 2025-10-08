@@ -1,6 +1,6 @@
 import { authService } from "./auth"
 
-const API_BASE_URL = "https://accordbackend.onrender.com/api"
+const API_BASE_URL = "http://localhost:5000/api"
 
 export interface DashboardOverview {
   totalVisits: number
@@ -151,6 +151,35 @@ class ApiService {
     if (endDate) params.append("endDate", endDate)
 
     return this.makeRequest(`/trails?${params.toString()}`)
+  }
+
+  // Engineering services endpoints
+  async getEngineeringServices(page = 1, limit = 20, filters: Record<string, any> = {}): Promise<any> {
+    const params = new URLSearchParams({ page: String(page), limit: String(limit) });
+    Object.entries(filters).forEach(([k, v]) => {
+      if (v !== undefined && v !== null && v !== "") params.set(k, String(v));
+    });
+    return this.makeRequest(`/engineering-services?${params.toString()}`);
+  }
+
+  async getEngineeringServicesByEngineer(engineerId: string, page = 1, limit = 50, filters: Record<string, any> = {}): Promise<any> {
+    const params = new URLSearchParams({ page: String(page), limit: String(limit) });
+    Object.entries(filters).forEach(([k, v]) => {
+      if (v !== undefined && v !== null && v !== "") params.set(k, String(v));
+    });
+    return this.makeRequest(`/engineering-services/engineer/${encodeURIComponent(engineerId)}?${params.toString()}`);
+  }
+
+  async getEngineeringServiceById(serviceId: string): Promise<any> {
+    return this.makeRequest(`/engineering-services/${encodeURIComponent(serviceId)}`);
+  }
+
+  async assignEngineeringService(serviceId: string, payload: any): Promise<any> {
+    // Use POST /:id/assign as suggested
+    return this.makeRequest(`/engineering-services/${encodeURIComponent(serviceId)}/assign`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
   }
 
   async getVisits(page = 1, limit = 20, startDate?: string, endDate?: string): Promise<any> {
