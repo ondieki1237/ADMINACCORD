@@ -107,7 +107,7 @@ export default function EngineerReports() {
       try {
         const token = typeof window !== "undefined" ? localStorage.getItem("accessToken") : null;
         // Use same endpoint pattern as user-manager
-        const res = await fetch("http://localhost:5000/api/users", {
+        const res = await fetch("https://accordbackend.onrender.com/api/users", {
           headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
         });
         if (!res.ok) return;
