@@ -40,7 +40,7 @@ export default function AdvancedAnalytics() {
   const [loadingUsers, setLoadingUsers] = useState(true);
   const [loadingAnalytics, setLoadingAnalytics] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [token, setToken] = useState<string | null>(localStorage.getItem("accessToken"));
+  const [token, setToken] = useState<string | null>(null);
   const { toast } = useToast();
 
   // Debug fetch function
@@ -71,13 +71,15 @@ export default function AdvancedAnalytics() {
 
   // Fetch current user and token
   useEffect(() => {
+    // Run only on client: read access token from localStorage and validate via authService
     const fetchToken = async () => {
       try {
-        const user = await authService.getCurrentUser();
-        const accessToken = localStorage.getItem("accessToken");
+        const accessToken = typeof window !== "undefined" ? localStorage.getItem("accessToken") : null;
         if (!accessToken) {
           throw new Error("No access token found. Please log in.");
         }
+        // Optionally validate the token by fetching current user
+        await authService.getCurrentUser();
         setToken(accessToken);
       } catch (err) {
         setError("Authentication error: Please log in again.");
@@ -87,11 +89,13 @@ export default function AdvancedAnalytics() {
           variant: "destructive",
         });
         setTimeout(() => {
-          window.location.href = "/login";
+          if (typeof window !== "undefined") window.location.href = "/login";
         }, 2000);
       }
     };
-    fetchToken();
+
+    // run on client only
+    if (typeof window !== "undefined") fetchToken();
   }, [toast]);
 
   // Fetch users when token is available
