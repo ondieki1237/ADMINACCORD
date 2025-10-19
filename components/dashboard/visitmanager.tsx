@@ -99,7 +99,7 @@ const VisitsPage = () => {
         ...(sort && { sort }),
       }).toString();
 
-      const res = await fetch(`https://accordbackend.onrender.com/api/admin/visits/user/${userId}?${params}`, {
+      const res = await fetch(`https://app.codewithseth.co.ke/api/admin/visits/user/${userId}?${params}`, {
         headers: {
           Authorization: `Bearer ${token}`,
           Accept: "application/json",
@@ -137,7 +137,7 @@ const VisitsPage = () => {
         ...(limit && { limit: limit.toString() }),
       }).toString();
 
-      const res = await fetch(`https://accordbackend.onrender.com/api/admin/visits/summary?${params}`, {
+      const res = await fetch(`https://app.codewithseth.co.ke/api/admin/visits/summary?${params}`, {
         headers: {
           Authorization: `Bearer ${token}`,
           Accept: "application/json",
@@ -171,7 +171,7 @@ const VisitsPage = () => {
         return;
       }
 
-      const res = await fetch(`https://accordbackend.onrender.com/api/admin/visits/${id}`, {
+      const res = await fetch(`https://app.codewithseth.co.ke/api/admin/visits/${id}`, {
         headers: {
           Authorization: `Bearer ${token}`,
           Accept: "application/json",

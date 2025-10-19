@@ -142,7 +142,7 @@ const HeatmapDashboard: React.FC = () => {
         return;
       }
 
-      const res = await fetch("https://accordbackend.onrender.com/api/dashboard/heatmap/live", {
+      const res = await fetch("https://app.codewithseth.co.ke/api/dashboard/heatmap/live", {
         headers: {
           Authorization: `Bearer ${token}`,
           Accept: "application/json",

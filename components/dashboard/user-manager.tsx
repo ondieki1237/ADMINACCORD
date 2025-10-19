@@ -52,7 +52,7 @@ export default function UserManager({ onBack }: { onBack?: () => void }) {
   useEffect(() => {
     const token = localStorage.getItem("accessToken");
     // Fetch users
-    fetch("https://accordbackend.onrender.com/api/users", {
+    fetch("https://app.codewithseth.co.ke/api/users", {
       headers: {
         Authorization: token ? `Bearer ${token}` : ""
       }
@@ -72,7 +72,7 @@ export default function UserManager({ onBack }: { onBack?: () => void }) {
       });
 
     // Fetch all sales
-    fetch("https://accordbackend.onrender.com/api/sales", {
+    fetch("https://app.codewithseth.co.ke/api/sales", {
       headers: {
         Authorization: token ? `Bearer ${token}` : ""
       }
@@ -93,7 +93,7 @@ export default function UserManager({ onBack }: { onBack?: () => void }) {
       target: newTargetValue,
     };
     try {
-      const res = await fetch("https://accordbackend.onrender.com/api/sales/target", {
+      const res = await fetch("https://app.codewithseth.co.ke/api/sales/target", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -129,7 +129,7 @@ export default function UserManager({ onBack }: { onBack?: () => void }) {
         target: inputValue,
       };
       try {
-        const res = await fetch("https://accordbackend.onrender.com/api/sales/target", {
+        const res = await fetch("https://app.codewithseth.co.ke/api/sales/target", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -162,7 +162,7 @@ export default function UserManager({ onBack }: { onBack?: () => void }) {
       };
 
       try {
-        const res = await fetch("https://accordbackend.onrender.com/api/sales", {
+        const res = await fetch("https://app.codewithseth.co.ke/api/sales", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -192,7 +192,7 @@ export default function UserManager({ onBack }: { onBack?: () => void }) {
   const confirmDelete = () => {
     if (!deleteUserId) return;
     const token = localStorage.getItem("accessToken");
-    fetch(`https://accordbackend.onrender.com/api/users/${deleteUserId}`, {
+    fetch(`https://app.codewithseth.co.ke/api/users/${deleteUserId}`, {
       method: "DELETE",
       headers: {
         Authorization: token ? `Bearer ${token}` : ""

@@ -103,7 +103,7 @@ export default function AdvancedAnalytics() {
     if (!token) return;
 
     setLoadingUsers(true);
-    debugFetch("https://accordbackend.onrender.com/api/admin/users", token)
+    debugFetch("https://app.codewithseth.co.ke/api/admin/users", token)
       .then((res) => {
         if (typeof res === "string" || !res.success || !Array.isArray(res.data)) {
           throw new Error("Invalid response or no users available.");
@@ -142,7 +142,7 @@ export default function AdvancedAnalytics() {
     setAnalyticsData(null);
 
     // call analytics for the whole time range (no date filters)
-    const url = `https://accordbackend.onrender.com/api/admin/analytics/sales/${selectedUserId}`;
+    const url = `https://app.codewithseth.co.ke/api/admin/analytics/sales/${selectedUserId}`;
     debugFetch(url, token)
       .then((res) => {
         if (typeof res === "string" || !res.success || !res.data) {

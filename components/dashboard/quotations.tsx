@@ -51,7 +51,7 @@ export default function QuotationList() {
       return;
     }
 
-    fetch("https://accordbackend.onrender.com/api/quotation/all", {
+    fetch("https://app.codewithseth.co.ke/api/quotation/all", {
       headers: { Authorization: `Bearer ${token}` },
     })
       .then((res) => {
@@ -88,7 +88,7 @@ export default function QuotationList() {
 
     setSubmitting(true);
     try {
-      const res = await fetch(`https://accordbackend.onrender.com/api/quotation/respond/${selectedId}`, {
+      const res = await fetch(`https://app.codewithseth.co.ke/api/quotation/respond/${selectedId}`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
