@@ -13,7 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { BarChart3, Clock, MapPin, Shield, TrendingUp, Users, FileText } from "lucide-react";
+import { BarChart3, Clock, MapPin, Shield, TrendingUp, Users, FileText, Download } from "lucide-react";
 import { Bar, Line } from "react-chartjs-2";
 import {
   Chart as ChartJS,
@@ -31,6 +31,7 @@ import QuotationList from "./quotations";
 import Reports from "./reports";
 import EngineerReports from "./engineer-reports";
 import VisitsPage from "./visitmanager";
+import PerformanceAnalytics from "./performance-analytics";
 
 // Register Chart.js components
 ChartJS.register(CategoryScale, LinearScale, BarElement, LineElement, PointElement, Title, Tooltip, Legend, Filler);
@@ -54,6 +55,7 @@ export function DashboardOverview() {
   const [showEngineerReports, setShowEngineerReports] = useState(false);
   const [showReports, setShowReports] = useState(false);
   const [showVisits, setShowVisits] = useState(false);
+  const [showPerformance, setShowPerformance] = useState(false);
   const { toast } = useToast();
 
   // Fetch user if not available
@@ -287,6 +289,142 @@ export function DashboardOverview() {
   const totalTrails = trailsDocs.length;
   const totalTrailDistance = trailsDocs.reduce((sum, trail) => sum + (trail.totalDistance || 0), 0);
 
+  // Download Functions
+  const downloadDashboardData = async (format: 'csv' | 'json' | 'excel') => {
+    try {
+      const dashboardData = {
+        summary: {
+          totalVisits,
+          totalTrails,
+          totalTrailDistance: totalTrailDistance.toFixed(2),
+          averageVisitDuration: averageDuration,
+          dateRange: dateRange,
+          generatedAt: new Date().toISOString(),
+          user: {
+            name: `${currentUser?.firstName} ${currentUser?.lastName}`,
+            role: currentUser?.role,
+            region: currentUser?.region,
+          }
+        },
+        visits: visitsResDocs,
+        trails: trailsDocs,
+        recentActivity: transformedActivity,
+        performance: data?.performance,
+      };
+
+      if (format === 'json') {
+        // Download as JSON
+        const blob = new Blob([JSON.stringify(dashboardData, null, 2)], { type: 'application/json' });
+        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `dashboard-data-${new Date().toISOString().split('T')[0]}.json`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(url);
+        
+        toast({
+          title: "Download Started",
+          description: "Dashboard data exported as JSON",
+        });
+      } else if (format === 'csv') {
+        // Download as CSV
+        const csvRows = [];
+        
+        // Summary section
+        csvRows.push('Dashboard Summary Report');
+        csvRows.push(`Generated: ${new Date().toLocaleString()}`);
+        csvRows.push(`User: ${currentUser?.firstName} ${currentUser?.lastName} (${currentUser?.role})`);
+        csvRows.push(`Region: ${currentUser?.region}`);
+        csvRows.push('');
+        
+        // Metrics
+        csvRows.push('Metric,Value');
+        csvRows.push(`Total Visits,${totalVisits}`);
+        csvRows.push(`Total Trails,${totalTrails}`);
+        csvRows.push(`Total Distance (km),${totalTrailDistance.toFixed(2)}`);
+        csvRows.push(`Average Visit Duration (min),${averageDuration}`);
+        csvRows.push('');
+        
+        // Visits data
+        csvRows.push('Visits');
+        csvRows.push('Date,Client,Location,Duration,Status');
+        visitsResDocs.forEach((visit: any) => {
+          csvRows.push(`${visit.date},${visit.client?.name || 'N/A'},${visit.client?.location || 'N/A'},${visit.duration || 'N/A'},${visit.status || 'N/A'}`);
+        });
+        csvRows.push('');
+        
+        // Trails data
+        csvRows.push('Trails');
+        csvRows.push('Date,Start Time,End Time,Distance (km),Stops');
+        trailsDocs.forEach((trail: any) => {
+          csvRows.push(`${trail.date},${trail.startTime},${trail.endTime},${trail.totalDistance?.toFixed(2) || 0},${trail.stops?.length || 0}`);
+        });
+        
+        const csvContent = csvRows.join('\n');
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `dashboard-report-${new Date().toISOString().split('T')[0]}.csv`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(url);
+        
+        toast({
+          title: "Download Started",
+          description: "Dashboard data exported as CSV",
+        });
+      } else if (format === 'excel') {
+        // Download Excel from analytics API
+        try {
+          const token = authService.getAccessToken();
+          const response = await fetch('https://app.codewithseth.co.ke/api/analytics/report/latest', {
+            headers: {
+              'Authorization': `Bearer ${token}`,
+            },
+          });
+          
+          if (!response.ok) {
+            throw new Error('Excel report not available. Generate analytics first.');
+          }
+          
+          const blob = await response.blob();
+          const url = window.URL.createObjectURL(blob);
+          const link = document.createElement('a');
+          link.href = url;
+          link.download = `analytics-report-${new Date().toISOString().split('T')[0]}.xlsx`;
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          window.URL.revokeObjectURL(url);
+          
+          toast({
+            title: "Download Started",
+            description: "Excel analytics report downloaded",
+          });
+        } catch (error) {
+          toast({
+            title: "Excel Report Unavailable",
+            description: "Generate analytics first or use CSV export",
+            variant: "destructive",
+          });
+        }
+      }
+    } catch (error) {
+      console.error('Download error:', error);
+      toast({
+        title: "Download Failed",
+        description: "Failed to export dashboard data",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const [showDownloadMenu, setShowDownloadMenu] = useState(false);
+
   if (isLoading || trailsLoading) {
     return (
       <div className="space-y-6">
@@ -378,6 +516,21 @@ export function DashboardOverview() {
     );
   }
 
+  if (showPerformance) {
+    return (
+      <div className="space-y-6">
+        <Button
+          variant="outline"
+          className="mb-4 flex items-center gap-2"
+          onClick={() => setShowPerformance(false)}
+        >
+          ← Back to Dashboard
+        </Button>
+        <PerformanceAnalytics />
+      </div>
+    );
+  }
+
   // Replace the previous return JSX with an improved modern layout + subtle animations
   return (
     <div className="space-y-6 px-6 py-8">
@@ -402,6 +555,15 @@ export function DashboardOverview() {
             >
               <BarChart3 className="h-4 w-4" />
               Reports
+            </Button>
+
+            <Button
+              variant="ghost"
+              className="flex items-center gap-2 px-3 py-2 rounded-md transition transform hover:scale-105 bg-gradient-to-r from-primary/10 to-primary/5"
+              onClick={() => setShowPerformance(true)}
+            >
+              <TrendingUp className="h-4 w-4" />
+              Performance
             </Button>
 
             <Button
@@ -448,6 +610,56 @@ export function DashboardOverview() {
           >
             Refresh
           </Button>
+
+          {/* Download Button with Dropdown */}
+          <div className="relative ml-2">
+            <Button
+              variant="default"
+              className="hidden sm:inline-flex items-center gap-2"
+              onClick={() => setShowDownloadMenu(!showDownloadMenu)}
+              title="Download dashboard data"
+            >
+              <Download className="h-4 w-4" />
+              Download
+            </Button>
+            
+            {showDownloadMenu && (
+              <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border z-50">
+                <div className="py-1">
+                  <button
+                    className="w-full text-left px-4 py-2 hover:bg-gray-100 flex items-center gap-2"
+                    onClick={() => {
+                      downloadDashboardData('csv');
+                      setShowDownloadMenu(false);
+                    }}
+                  >
+                    <FileText className="h-4 w-4" />
+                    Export as CSV
+                  </button>
+                  <button
+                    className="w-full text-left px-4 py-2 hover:bg-gray-100 flex items-center gap-2"
+                    onClick={() => {
+                      downloadDashboardData('json');
+                      setShowDownloadMenu(false);
+                    }}
+                  >
+                    <FileText className="h-4 w-4" />
+                    Export as JSON
+                  </button>
+                  <button
+                    className="w-full text-left px-4 py-2 hover:bg-gray-100 flex items-center gap-2"
+                    onClick={() => {
+                      downloadDashboardData('excel');
+                      setShowDownloadMenu(false);
+                    }}
+                  >
+                    <FileText className="h-4 w-4" />
+                    Analytics Excel Report
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
@@ -516,6 +728,18 @@ export function DashboardOverview() {
                 <TrendingUp className="h-4 w-4" />
                 Advanced Analytics
               </Button>
+              
+              {/* Download Button for Mobile */}
+              <div className="relative">
+                <Button
+                  variant="outline"
+                  className="w-full justify-start gap-2 transition transform hover:scale-105 bg-primary/5"
+                  onClick={() => setShowDownloadMenu(!showDownloadMenu)}
+                >
+                  <Download className="h-4 w-4" />
+                  Download Data
+                </Button>
+              </div>
             </div>
           </CardContent>
         </Card>
