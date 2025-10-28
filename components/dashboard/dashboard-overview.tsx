@@ -11,9 +11,7 @@ import { authService } from "@/lib/auth";
 import { hasAdminAccess, canViewHeatmap } from "@/lib/permissions";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Calendar } from "@/components/ui/calendar";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { BarChart3, Clock, MapPin, Shield, TrendingUp, Users, FileText, Download } from "lucide-react";
+import { BarChart3, Clock, MapPin, Shield, TrendingUp, Users, FileText, Download, Calendar } from "lucide-react";
 import { Bar, Line } from "react-chartjs-2";
 import {
   Chart as ChartJS,
@@ -578,15 +576,6 @@ export function DashboardOverview() {
             <Button
               variant="ghost"
               className="flex items-center gap-2 px-3 py-2 rounded-md transition transform hover:scale-105"
-              onClick={() => (window.location.href = "/dashboard/communications")}
-            >
-              <FileText className="h-4 w-4" />
-              Communications
-            </Button>
-
-            <Button
-              variant="ghost"
-              className="flex items-center gap-2 px-3 py-2 rounded-md transition transform hover:scale-105"
               onClick={() => setShowQuotations(true)}
             >
               <FileText className="h-4 w-4" />
@@ -599,6 +588,15 @@ export function DashboardOverview() {
             >
               <FileText className="h-4 w-4" />
               Engineer Reports
+            </Button>
+
+            <Button
+              variant="ghost"
+              className="flex items-center gap-2 px-3 py-2 rounded-md transition transform hover:scale-105 bg-black text-white hover:bg-gray-800"
+              onClick={() => window.location.href = "/dashboard/planners"}
+            >
+              <Calendar className="h-4 w-4" />
+              Planners
             </Button>
           </div>
 
@@ -727,6 +725,14 @@ export function DashboardOverview() {
               >
                 <TrendingUp className="h-4 w-4" />
                 Advanced Analytics
+              </Button>
+              <Button
+                variant="outline"
+                className="w-full justify-start gap-2 transition transform hover:scale-105 bg-black text-white hover:bg-gray-800 border-black"
+                onClick={() => (window.location.href = "/dashboard/planners")}
+              >
+                <Calendar className="h-4 w-4" />
+                Weekly Planners
               </Button>
               
               {/* Download Button for Mobile */}

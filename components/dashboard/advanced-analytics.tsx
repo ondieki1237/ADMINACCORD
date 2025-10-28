@@ -2,8 +2,10 @@
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
+import { useRouter } from "next/navigation";
 import { authService } from "@/lib/auth";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { ArrowLeft, Download, TrendingUp, Users, DollarSign, Target, Calendar } from "lucide-react";
 
 interface User {
   _id: string;
@@ -34,6 +36,7 @@ interface AnalyticsData {
 }
 
 export default function AdvancedAnalytics() {
+  const router = useRouter();
   const [users, setUsers] = useState<User[]>([]);
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [analyticsData, setAnalyticsData] = useState<AnalyticsData | null>(null);
@@ -227,121 +230,255 @@ export default function AdvancedAnalytics() {
   if (error && !users.length && !selectedUserId) return <div className="text-red-500">{error}</div>;
 
   return (
-    <div className="space-y-6">
-      <Card className="neumorphic-card">
-        <CardHeader>
-          <CardTitle>Sales Analytics Dashboard</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {/* User Selection */}
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 p-6">
+      {/* Header with Back Button */}
+      <div className="mb-6">
+        <button
+          onClick={() => router.push('/')}
+          className="flex items-center space-x-2 text-blue-600 hover:text-blue-700 transition-colors mb-4"
+        >
+          <ArrowLeft className="h-5 w-5" />
+          <span className="font-medium">Back to Home</span>
+        </button>
+        <div className="flex items-center space-x-4">
+          <div className="bg-gradient-to-br from-blue-500 to-blue-600 p-3 rounded-xl shadow-lg">
+            <TrendingUp className="h-8 w-8 text-white" />
+          </div>
           <div>
-            <h3 className="text-lg font-semibold mb-2">Select a User</h3>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <h1 className="text-3xl font-bold text-gray-900">Sales Analytics</h1>
+            <p className="text-gray-500">Detailed performance insights</p>
+          </div>
+        </div>
+      </div>
+
+      <Card className="shadow-xl border-2 border-gray-100">
+        <CardHeader className="bg-gradient-to-r from-gray-50 to-white border-b">
+          <CardTitle className="text-xl">User Analytics Dashboard</CardTitle>
+        </CardHeader>
+        <CardContent className="p-6">
+          {/* User Selection */}
+          <div className="mb-8">
+            <div className="flex items-center space-x-2 mb-4">
+              <Users className="h-5 w-5 text-blue-600" />
+              <h3 className="text-lg font-semibold text-gray-900">Select a User</h3>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
               {users.length > 0 ? (
                 users.map((user) => (
                   <Button
                     key={user._id}
                     onClick={() => setSelectedUserId(user._id)}
                     variant={selectedUserId === user._id ? "default" : "outline"}
-                    className="w-full text-left"
+                    className={`w-full justify-start text-left h-auto py-3 ${
+                      selectedUserId === user._id 
+                        ? "bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-md" 
+                        : "hover:border-blue-300 hover:bg-blue-50"
+                    }`}
                   >
-                    {user.firstName} {user.lastName} ({user.region})
+                    <div>
+                      <div className="font-semibold">
+                        {user.firstName} {user.lastName}
+                      </div>
+                      <div className="text-xs opacity-80">
+                        {user.region} • {user.role}
+                      </div>
+                    </div>
                   </Button>
                 ))
               ) : (
-                <div>No users available.</div>
+                <div className="col-span-3 text-center py-8 text-gray-500">
+                  No users available.
+                </div>
               )}
             </div>
           </div>
 
           {/* Analytics Section */}
           {selectedUserId && (
-            <div className="mt-6">
+            <div className="space-y-6">
               {loadingAnalytics ? (
-                <div>Loading analytics...</div>
+                <div className="text-center py-12">
+                  <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+                  <p className="mt-4 text-gray-600">Loading analytics...</p>
+                </div>
               ) : error ? (
-                <div className="text-red-500">{error}</div>
+                <div className="bg-red-50 border-2 border-red-200 rounded-xl p-6 text-center">
+                  <p className="text-red-600 font-medium">{error}</p>
+                </div>
               ) : analyticsData ? (
                 <>
-                  <div className="flex justify-between items-center mb-4">
-                    <h3 className="text-lg font-semibold">
-                      Analytics for {analyticsData.user.firstName} {analyticsData.user.lastName}
-                    </h3>
-                    <Button onClick={handleExport} disabled={!analyticsData}>
+                  <div className="flex justify-between items-center pb-4 border-b">
+                    <div>
+                      <h3 className="text-xl font-bold text-gray-900">
+                        {analyticsData.user.firstName} {analyticsData.user.lastName}
+                      </h3>
+                      <p className="text-sm text-gray-500">
+                        {analyticsData.user.role} • {analyticsData.user.email}
+                      </p>
+                    </div>
+                    <Button 
+                      onClick={handleExport} 
+                      disabled={!analyticsData}
+                      className="bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700"
+                    >
+                      <Download className="h-4 w-4 mr-2" />
                       Export CSV
                     </Button>
                   </div>
 
                   {/* Summary Metrics */}
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div className="p-4 border rounded">
-                      <h4 className="font-semibold">Total Revenue</h4>
-                      <p className="text-2xl">${analyticsData.summary.revenue.toLocaleString()}</p>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <Card className="border-2 border-green-100 bg-gradient-to-br from-green-50 to-white">
+                      <CardContent className="p-6">
+                        <div className="flex items-center justify-between mb-2">
+                          <DollarSign className="h-8 w-8 text-green-600" />
+                        </div>
+                        <h4 className="text-sm font-medium text-gray-600 mb-1">Total Revenue</h4>
+                        <p className="text-3xl font-bold text-gray-900">
+                          {new Intl.NumberFormat('en-KE', {
+                            style: 'currency',
+                            currency: 'KES',
+                            minimumFractionDigits: 0
+                          }).format(analyticsData.summary.revenue)}
+                        </p>
+                      </CardContent>
+                    </Card>
+
+                    <Card className="border-2 border-blue-100 bg-gradient-to-br from-blue-50 to-white">
+                      <CardContent className="p-6">
+                        <div className="flex items-center justify-between mb-2">
+                          <Target className="h-8 w-8 text-blue-600" />
+                        </div>
+                        <h4 className="text-sm font-medium text-gray-600 mb-1">Conversion Rate</h4>
+                        <p className="text-3xl font-bold text-gray-900">
+                          {(analyticsData.summary.conversionRate * 100).toFixed(1)}%
+                        </p>
+                      </CardContent>
+                    </Card>
+
+                    <Card className="border-2 border-purple-100 bg-gradient-to-br from-purple-50 to-white">
+                      <CardContent className="p-6">
+                        <div className="flex items-center justify-between mb-2">
+                          <TrendingUp className="h-8 w-8 text-purple-600" />
+                        </div>
+                        <h4 className="text-sm font-medium text-gray-600 mb-1">Avg Deal Size</h4>
+                        <p className="text-3xl font-bold text-gray-900">
+                          {new Intl.NumberFormat('en-KE', {
+                            style: 'currency',
+                            currency: 'KES',
+                            minimumFractionDigits: 0
+                          }).format(analyticsData.summary.avgDealSize)}
+                        </p>
+                      </CardContent>
+                    </Card>
+
+                    <Card className="border-2 border-orange-100 bg-gradient-to-br from-orange-50 to-white">
+                      <CardContent className="p-6">
+                        <div className="flex items-center justify-between mb-2">
+                          <Users className="h-8 w-8 text-orange-600" />
+                        </div>
+                        <h4 className="text-sm font-medium text-gray-600 mb-1">Total Visits</h4>
+                        <p className="text-3xl font-bold text-gray-900">
+                          {analyticsData.summary.visitsCount}
+                        </p>
+                      </CardContent>
+                    </Card>
+                  </div>
+
+                  {/* Additional Stats Row */}
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                    <div className="p-4 bg-white border-2 border-gray-100 rounded-xl">
+                      <p className="text-sm text-gray-600 mb-1">Orders Placed</p>
+                      <p className="text-2xl font-bold text-gray-900">{analyticsData.summary.ordersPlaced}</p>
                     </div>
-                    <div className="p-4 border rounded">
-                      <h4 className="font-semibold">Conversion Rate</h4>
-                      <p className="text-2xl">
-                        {(analyticsData.summary.conversionRate * 100).toFixed(1)}%
-                      </p>
+                    <div className="p-4 bg-white border-2 border-gray-100 rounded-xl">
+                      <p className="text-sm text-gray-600 mb-1">Quotations Sent</p>
+                      <p className="text-2xl font-bold text-gray-900">{analyticsData.summary.quotationsRequested}</p>
                     </div>
-                    <div className="p-4 border rounded">
-                      <h4 className="font-semibold">Average Deal Size</h4>
-                      <p className="text-2xl">
-                        ${analyticsData.summary.avgDealSize.toLocaleString()}
-                      </p>
+                    <div className="p-4 bg-white border-2 border-gray-100 rounded-xl">
+                      <p className="text-sm text-gray-600 mb-1">Converted Quotes</p>
+                      <p className="text-2xl font-bold text-gray-900">{analyticsData.summary.quotationsConverted}</p>
+                    </div>
+                    <div className="p-4 bg-white border-2 border-gray-100 rounded-xl">
+                      <p className="text-sm text-gray-600 mb-1">Unique Clients</p>
+                      <p className="text-2xl font-bold text-gray-900">{analyticsData.summary.uniqueClients}</p>
                     </div>
                   </div>
 
                   {/* Top Clients Table */}
-                  <div className="mt-6">
-                    <h4 className="text-lg font-semibold mb-2">Top Clients</h4>
-                    <table className="w-full border">
-                      <thead>
-                        <tr className="bg-gray-200">
-                          <th className="p-2">Name</th>
-                          <th className="p-2">Visits</th>
-                          <th className="p-2">Revenue</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {analyticsData.topClients.map((client) => (
-                          <tr key={client.clientId}>
-                            <td className="p-2">{client.name}</td>
-                            <td className="p-2">{client.visits}</td>
-                            <td className="p-2">${(client.revenue ?? 0).toLocaleString()}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
+                  <Card className="border-2 border-gray-100">
+                    <CardHeader className="bg-gradient-to-r from-gray-50 to-white border-b">
+                      <CardTitle className="text-lg">Top Clients</CardTitle>
+                    </CardHeader>
+                    <CardContent className="p-0">
+                      <div className="overflow-x-auto">
+                        <table className="w-full">
+                          <thead>
+                            <tr className="bg-gray-50 border-b">
+                              <th className="p-4 text-left text-sm font-semibold text-gray-700">Client Name</th>
+                              <th className="p-4 text-left text-sm font-semibold text-gray-700">Visits</th>
+                              <th className="p-4 text-left text-sm font-semibold text-gray-700">Revenue</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {analyticsData.topClients.map((client, idx) => (
+                              <tr key={client.clientId} className={`border-b hover:bg-gray-50 transition-colors ${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'}`}>
+                                <td className="p-4 font-medium text-gray-900">{client.name}</td>
+                                <td className="p-4 text-gray-600">{client.visits}</td>
+                                <td className="p-4 font-semibold text-green-600">
+                                  {new Intl.NumberFormat('en-KE', {
+                                    style: 'currency',
+                                    currency: 'KES',
+                                    minimumFractionDigits: 0
+                                  }).format(client.revenue ?? 0)}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </CardContent>
+                  </Card>
 
                   {/* Top Products Table */}
-                  <div className="mt-6">
-                    <h4 className="text-lg font-semibold mb-2">Top Products</h4>
-                    <table className="w-full border">
-                      <thead>
-                        <tr className="bg-gray-200">
-                          <th className="p-2">Name</th>
-                          <th className="p-2">Units</th>
-                          <th className="p-2">Revenue</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {analyticsData.topProducts.map((product) => (
-                          <tr key={product.sku}>
-                            <td className="p-2">{product.name}</td>
-                            <td className="p-2">{product.units}</td>
-                            <td className="p-2">${(product.revenue ?? 0).toLocaleString()}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-
-                  {/* Optional: Revenue Over Time chart could go here. */}
+                  <Card className="border-2 border-gray-100">
+                    <CardHeader className="bg-gradient-to-r from-gray-50 to-white border-b">
+                      <CardTitle className="text-lg">Top Products</CardTitle>
+                    </CardHeader>
+                    <CardContent className="p-0">
+                      <div className="overflow-x-auto">
+                        <table className="w-full">
+                          <thead>
+                            <tr className="bg-gray-50 border-b">
+                              <th className="p-4 text-left text-sm font-semibold text-gray-700">Product Name</th>
+                              <th className="p-4 text-left text-sm font-semibold text-gray-700">Units Sold</th>
+                              <th className="p-4 text-left text-sm font-semibold text-gray-700">Revenue</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {analyticsData.topProducts.map((product, idx) => (
+                              <tr key={product.sku} className={`border-b hover:bg-gray-50 transition-colors ${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'}`}>
+                                <td className="p-4 font-medium text-gray-900">{product.name}</td>
+                                <td className="p-4 text-gray-600">{product.units}</td>
+                                <td className="p-4 font-semibold text-green-600">
+                                  {new Intl.NumberFormat('en-KE', {
+                                    style: 'currency',
+                                    currency: 'KES',
+                                    minimumFractionDigits: 0
+                                  }).format(product.revenue ?? 0)}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </CardContent>
+                  </Card>
                 </>
               ) : (
-                <div>No analytics data available.</div>
+                <div className="text-center py-12 text-gray-500">
+                  No analytics data available for this user.
+                </div>
               )}
             </div>
           )}

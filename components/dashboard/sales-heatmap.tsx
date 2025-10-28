@@ -33,13 +33,20 @@ const COLORS = [
   '#0ea5e9', // sky-500
   '#eab308', // amber-500
 ];
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { MapContainer, TileLayer, Polyline, Marker, Popup, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import 'leaflet.heat';
-import { RefreshCw, MapPin, Activity } from 'lucide-react';
+import { RefreshCw, MapPin, Activity, Radio, ArrowLeft, Calendar, Clock, Users } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 import HospitalLayer from "./HospitalLayer";
+import { 
+  fetchAdminTracks, 
+  flattenAndSortPoints, 
+  startPollingTracks, 
+  type LocationTrack 
+} from '@/lib/locationStream';
 
 // Extend the Leaflet Map type to include heatLayer
 declare module 'leaflet' {
@@ -51,6 +58,13 @@ declare module 'leaflet' {
 interface TrailPoint {
   lat: number;
   lng: number;
+  timestamp?: number; // Unix timestamp in milliseconds
+}
+
+interface HeatmapPoint {
+  lat: number;
+  lng: number;
+  intensity: number;
 }
 
 interface UserInfo {
@@ -112,91 +126,235 @@ const HeatmapLayer: React.FC<{ data: HeatmapPoint[] }> = ({ data }) => {
 };
 
 const HeatmapDashboard: React.FC = () => {
-  const [trails, setTrails] = useState<Trail[]>([]);
-  // For demo: simulate owner/userId per point (replace with real user data if available)
-  // For selection
-  const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
-  const userList = trails.map(trail => trail.user);
-  const filteredTrails = selectedUserId ? trails.filter(trail => trail.user.id === selectedUserId) : trails;
+  const router = useRouter();
+  
+  // State for continuous tracking
+  const [tracksMap, setTracksMap] = useState<Map<string, LocationTrack>>(new Map());
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
-  const [autoRefresh, setAutoRefresh] = useState<boolean>(true);
+  const [liveMode, setLiveMode] = useState<boolean>(false);
   const [showHospitals, setShowHospitals] = useState<boolean>(true);
-  const intervalRef = useRef<NodeJS.Timeout | null>(null);
+  const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
+  const [selectedDay, setSelectedDay] = useState<string>('today');
+  
+  const pollingStopperRef = useRef<(() => void) | null>(null);
 
-  // Kenya bounds for better map positioning
-  const kenyaBounds: [[number, number], [number, number]] = [
-    [-4.7, 33.9], // Southwest
-    [5.5, 41.9]   // Northeast
+  // Day options
+  const dayOptions = [
+    { value: 'today', label: 'Today' },
+    { value: 'yesterday', label: 'Yesterday' },
+    { value: '2days', label: '2 Days Ago' },
+    { value: '3days', label: '3 Days Ago' },
+    { value: 'week', label: 'Past Week' },
+    { value: 'all', label: 'All Time' }
   ];
 
-  const fetchHeatmapData = async () => {
+  // Calculate date range based on selected day
+  const getDateRange = () => {
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    
+    switch (selectedDay) {
+      case 'today':
+        return { 
+          from: today.toISOString(),
+          to: new Date(today.getTime() + 24 * 60 * 60 * 1000).toISOString()
+        };
+      case 'yesterday':
+        const yesterday = new Date(today.getTime() - 24 * 60 * 60 * 1000);
+        return {
+          from: yesterday.toISOString(),
+          to: today.toISOString()
+        };
+      case '2days':
+        const twoDaysAgo = new Date(today.getTime() - 2 * 24 * 60 * 60 * 1000);
+        return {
+          from: twoDaysAgo.toISOString(),
+          to: new Date(twoDaysAgo.getTime() + 24 * 60 * 60 * 1000).toISOString()
+        };
+      case '3days':
+        const threeDaysAgo = new Date(today.getTime() - 3 * 24 * 60 * 60 * 1000);
+        return {
+          from: threeDaysAgo.toISOString(),
+          to: new Date(threeDaysAgo.getTime() + 24 * 60 * 60 * 1000).toISOString()
+        };
+      case 'week':
+        const weekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
+        return {
+          from: weekAgo.toISOString(),
+          to: new Date().toISOString()
+        };
+      case 'all':
+      default:
+        return { from: undefined, to: undefined };
+    }
+  };
+  
+  // Convert tracks to legacy Trail format for rendering
+  // Important: Sort by timestamp to connect points in chronological order
+  const trails = useMemo(() => {
+    const allTracks = Array.from(tracksMap.values());
+    const userTrailsMap = new Map<string, Trail>();
+    
+    allTracks.forEach(track => {
+      const userId = typeof track.userId === 'object' ? track.userId._id : track.userId;
+      const userName = typeof track.userId === 'object' 
+        ? `${track.userId.firstName || ''} ${track.userId.lastName || ''}`.trim() 
+        : userId;
+      const employeeId = typeof track.userId === 'object' ? track.userId.employeeId : userId;
+      
+      if (!userTrailsMap.has(userId)) {
+        userTrailsMap.set(userId, {
+          user: {
+            id: userId,
+            employeeId: employeeId || userId,
+            name: userName || 'Unknown User',
+            region: 'N/A'
+          },
+          path: []
+        });
+      }
+      
+      const trail = userTrailsMap.get(userId)!;
+      // Collect locations with timestamps for sorting
+      track.locations.forEach(loc => {
+        const timestamp = typeof loc.timestamp === 'number' 
+          ? loc.timestamp 
+          : new Date(String(loc.timestamp)).getTime();
+        
+        trail.path.push({
+          lat: loc.latitude,
+          lng: loc.longitude,
+          timestamp
+        });
+      });
+    });
+    
+    // Sort each user's path by timestamp to ensure chronological order
+    userTrailsMap.forEach(trail => {
+      trail.path.sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
+    });
+    
+    return Array.from(userTrailsMap.values());
+  }, [tracksMap]);
+  
+  const userList = useMemo(() => trails.map(trail => trail.user), [trails]);
+  const filteredTrails = useMemo(() => 
+    selectedUserId ? trails.filter(trail => trail.user.id === selectedUserId) : trails,
+    [trails, selectedUserId]
+  );
+
+  // Get last synced timestamp for polling
+  const getLastSyncedAt = () => {
+    const allTracks = Array.from(tracksMap.values());
+    if (allTracks.length === 0) return undefined;
+    
+    const sorted = allTracks
+      .filter(t => t.syncedAt)
+      .sort((a, b) => new Date(b.syncedAt!).getTime() - new Date(a.syncedAt!).getTime());
+    
+    return sorted[0]?.syncedAt;
+  };
+
+  // Merge new tracks into existing map
+  const mergeTracks = (newTracks: LocationTrack[]) => {
+    setTracksMap((m) => {
+      const copy = new Map(m);
+      for (const t of newTracks) {
+        copy.set(t._id, t);
+      }
+      return copy;
+    });
+    setLastUpdated(new Date());
+  };
+
+  const fetchInitialData = async () => {
     try {
       setError(null);
+      setLoading(true);
 
       const token = localStorage.getItem("accessToken");
       if (!token) {
-        setError("No auth token found in localStorage (accessToken). Please log in.");
+        setError("No auth token found. Please log in.");
         setLoading(false);
         return;
       }
 
-      const res = await fetch("https://app.codewithseth.co.ke/api/dashboard/heatmap/live", {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          Accept: "application/json",
-        },
+      const dateRange = getDateRange();
+
+      const result = await fetchAdminTracks({
+        baseUrl: 'https://app.codewithseth.co.ke/api',
+        token,
+        userId: selectedUserId || undefined,
+        from: dateRange.from,
+        to: dateRange.to,
+        limit: 500,
+        page: 1
       });
 
-      if (!res.ok) {
-        const body = await res.text();
-        if (res.status === 401) {
-          // invalid/expired token — clear and inform user
-          setError("Authentication failed. Please log in again.");
-          localStorage.removeItem("accessToken");
-          return;
-        }
-        throw new Error(`Server returned ${res.status}: ${body || res.statusText}`);
-      }
-
-      const result: ApiResponse = await res.json();
       if (result.success && Array.isArray(result.data)) {
-        setTrails(result.data);
-        setLastUpdated(new Date());
+        // Clear existing tracks when changing filters
+        setTracksMap(new Map());
+        mergeTracks(result.data);
       } else {
-        throw new Error("API returned unsuccessful response or unexpected shape");
+        throw new Error("API returned unsuccessful response");
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to fetch heatmap data");
-      console.error("Error fetching heatmap data:", err);
+      setError(err instanceof Error ? err.message : "Failed to fetch location data");
+      console.error("Error fetching location data:", err);
     } finally {
       setLoading(false);
     }
   };
-  
-  useEffect(() => {
-    fetchHeatmapData();
-  }, []);
 
+  // Initial fetch and when filters change
   useEffect(() => {
-    if (autoRefresh) {
-      intervalRef.current = setInterval(fetchHeatmapData, 30000);
+    fetchInitialData();
+  }, [selectedUserId, selectedDay]);
+
+  // Start/stop polling when live mode toggles
+  useEffect(() => {
+    if (liveMode) {
+      const token = localStorage.getItem("accessToken");
+      if (!token) {
+        setError("No auth token for live mode");
+        setLiveMode(false);
+        return;
+      }
+
+      const stopper = startPollingTracks({
+        intervalMs: 5000, // poll every 5 seconds
+        onUpdate: mergeTracks,
+        getLastSyncedAt,
+        fetchOptions: {
+          baseUrl: 'https://app.codewithseth.co.ke/api',
+          token,
+          userId: selectedUserId || undefined,
+          limit: 100
+        }
+      });
+
+      pollingStopperRef.current = stopper;
+
+      return () => {
+        stopper();
+        pollingStopperRef.current = null;
+      };
     } else {
-      if (intervalRef.current) clearInterval(intervalRef.current);
+      if (pollingStopperRef.current) {
+        pollingStopperRef.current();
+        pollingStopperRef.current = null;
+      }
     }
-    return () => {
-      if (intervalRef.current) clearInterval(intervalRef.current);
-    };
-  }, [autoRefresh]);
+  }, [liveMode, selectedUserId]);
 
   const handleManualRefresh = () => {
-    setLoading(true);
-    fetchHeatmapData();
+    fetchInitialData();
   };
 
-  const toggleAutoRefresh = () => {
-    setAutoRefresh(!autoRefresh);
+  const toggleLiveMode = () => {
+    setLiveMode(!liveMode);
   };
 
   // Custom icon using a location pin
@@ -208,63 +366,185 @@ const HeatmapDashboard: React.FC = () => {
   });
 
   return (
-    <div className="min-h-screen bg-gray-50 flex">
-      {/* Sidebar: List active points, trails, owners, and selection UI */}
-      <aside className="w-80 bg-white border-r border-gray-200 p-4 flex flex-col gap-6">
-        <div>
-          <h2 className="text-lg font-bold mb-2">Active Trails</h2>
-          <ul className="space-y-2 max-h-48 overflow-y-auto">
-            {userList.map(user => {
-              const trail = trails.find(t => t.user.id === user.id);
-              const dist = trail ? trailDistance(trail.path) : 0;
-              return (
-                <li key={user.id} className="flex flex-col mb-2">
-                  <span className="font-medium text-blue-700">{user.name}</span>
-                  <span className="text-xs text-gray-500">ID: {user.employeeId} | Region: {user.region}</span>
-                  <span className="text-xs text-gray-400">{trail?.path.length ?? 0} pts | {dist.toFixed(2)} km</span>
-                </li>
-              );
-            })}
-          </ul>
-        </div>
-        {/* Total distance for all users */}
-        <div className="mt-4 text-sm font-semibold text-blue-900">
-          Total Distance: {trails.reduce((sum, t) => sum + trailDistance(t.path), 0).toFixed(2)} km
-        </div>
-        <div>
-          <label htmlFor="user-select" className="block text-sm font-medium mb-1">Show Trail for:</label>
-          <select
-            id="user-select"
-            className="w-full border rounded px-2 py-1"
-            value={selectedUserId || ''}
-            onChange={e => setSelectedUserId(e.target.value || null)}
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex">
+      {/* Sidebar: Enhanced with better styling */}
+      <aside className="w-96 bg-white shadow-xl flex flex-col">
+        {/* Sidebar Header */}
+        <div className="p-6 bg-gradient-to-r from-blue-600 to-blue-700 text-white">
+          <button
+            onClick={() => router.push('/')}
+            className="flex items-center space-x-2 mb-4 text-blue-100 hover:text-white transition-colors"
           >
-            <option value="">All Trails</option>
-            {userList.map(user => (
-              <option key={user.id} value={user.id}>{user.name}</option>
-            ))}
-          </select>
+            <ArrowLeft className="h-4 w-4" />
+            <span className="text-sm font-medium">Back to Home</span>
+          </button>
+          <h2 className="text-2xl font-bold mb-2">Location Tracker</h2>
+          <p className="text-blue-100 text-sm">Monitor field sales activities</p>
         </div>
-        <div>
-          <h3 className="text-md font-semibold mb-1">Points</h3>
-          <ul className="text-xs max-h-40 overflow-y-auto">
-            {filteredTrails.map(trail => (
-              trail.path.map((pt, i) => (
-                <li key={trail.user.id + '-' + i} className="mb-1">
-                  <span className="font-mono">[{pt.lat}, {pt.lng}]</span>
-                  <span className="ml-2 text-gray-400">({trail.user.name})</span>
-                </li>
-              ))
-            ))}
-          </ul>
-        </div>
-        <div>
+
+        <div className="flex-1 overflow-y-auto p-6 space-y-6">
+          {/* Day Selector */}
+          <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl p-4 border border-blue-100">
+            <label className="flex items-center space-x-2 text-sm font-semibold text-gray-700 mb-3">
+              <Calendar className="h-4 w-4 text-blue-600" />
+              <span>Select Time Period</span>
+            </label>
+            <select
+              value={selectedDay}
+              onChange={(e) => setSelectedDay(e.target.value)}
+              className="w-full border-2 border-blue-200 rounded-lg px-3 py-2.5 text-sm font-medium bg-white hover:border-blue-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all"
+            >
+              {dayOptions.map(opt => (
+                <option key={opt.value} value={opt.value}>{opt.label}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* User Filter */}
+          <div className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-xl p-4 border border-purple-100">
+            <label className="flex items-center space-x-2 text-sm font-semibold text-gray-700 mb-3">
+              <Users className="h-4 w-4 text-purple-600" />
+              <span>Filter by User</span>
+            </label>
+            <select
+              value={selectedUserId || ''}
+              onChange={(e) => setSelectedUserId(e.target.value || null)}
+              className="w-full border-2 border-purple-200 rounded-lg px-3 py-2.5 text-sm font-medium bg-white hover:border-purple-300 focus:border-purple-500 focus:ring-2 focus:ring-purple-200 transition-all"
+            >
+              <option value="">All Users</option>
+              {userList.map(user => (
+                <option key={user.id} value={user.id}>
+                  {user.name} ({user.employeeId})
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Stats Cards */}
+          <div className="grid grid-cols-2 gap-3">
+            <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-lg p-4 border border-green-200">
+              <div className="flex items-center justify-between mb-1">
+                <Users className="h-5 w-5 text-green-600" />
+              </div>
+              <div className="text-2xl font-bold text-gray-800">{userList.length}</div>
+              <div className="text-xs text-gray-600 font-medium">Active Users</div>
+            </div>
+            <div className="bg-gradient-to-br from-orange-50 to-amber-50 rounded-lg p-4 border border-orange-200">
+              <div className="flex items-center justify-between mb-1">
+                <MapPin className="h-5 w-5 text-orange-600" />
+              </div>
+              <div className="text-2xl font-bold text-gray-800">
+                {trails.reduce((acc, t) => acc + t.path.length, 0)}
+              </div>
+              <div className="text-xs text-gray-600 font-medium">Total Points</div>
+            </div>
+          </div>
+
+          {/* Active Trails List */}
+          <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+            <div className="bg-gray-50 px-4 py-3 border-b border-gray-200">
+              <h3 className="text-sm font-bold text-gray-700">Active Trails</h3>
+            </div>
+            <div className="max-h-64 overflow-y-auto">
+              {userList.length === 0 ? (
+                <div className="p-6 text-center text-gray-400 text-sm">
+                  No trails found for selected filters
+                </div>
+              ) : (
+                <ul className="divide-y divide-gray-100">
+                  {userList.map((user, idx) => {
+                    const trail = trails.find(t => t.user.id === user.id);
+                    const dist = trail ? trailDistance(trail.path) : 0;
+                    const color = COLORS[idx % COLORS.length];
+                    return (
+                      <li key={user.id} className="p-4 hover:bg-gray-50 transition-colors">
+                        <div className="flex items-start space-x-3">
+                          <div 
+                            className="w-3 h-3 rounded-full mt-1 flex-shrink-0"
+                            style={{ backgroundColor: color }}
+                          />
+                          <div className="flex-1 min-w-0">
+                            <p className="font-semibold text-gray-800 text-sm truncate">{user.name}</p>
+                            <p className="text-xs text-gray-500">ID: {user.employeeId}</p>
+                            <div className="flex items-center space-x-3 mt-1">
+                              <span className="text-xs text-gray-600">
+                                <span className="font-medium">{trail?.path.length ?? 0}</span> points
+                              </span>
+                              <span className="text-xs text-gray-600">
+                                <span className="font-medium">{dist.toFixed(1)}</span> km
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </div>
+          </div>
+
+          {/* Points Timeline */}
+          <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+            <div className="bg-gray-50 px-4 py-3 border-b border-gray-200 flex items-center justify-between">
+              <h3 className="text-sm font-bold text-gray-700">Points Timeline</h3>
+              <Clock className="h-4 w-4 text-gray-400" />
+            </div>
+            <div className="max-h-80 overflow-y-auto">
+              {filteredTrails.length === 0 ? (
+                <div className="p-6 text-center text-gray-400 text-sm">
+                  No points to display
+                </div>
+              ) : (
+                <ul className="divide-y divide-gray-100">
+                  {filteredTrails.flatMap(trail =>
+                    trail.path.map((pt, i) => {
+                      const userIdx = userList.findIndex(u => u.id === trail.user.id);
+                      const color = COLORS[userIdx % COLORS.length];
+                      const time = pt.timestamp ? new Date(pt.timestamp).toLocaleTimeString() : 'N/A';
+                      const date = pt.timestamp ? new Date(pt.timestamp).toLocaleDateString() : 'N/A';
+                      
+                      return (
+                        <li key={`${trail.user.id}-${i}`} className="p-3 hover:bg-gray-50 transition-colors">
+                          <div className="flex items-start space-x-3">
+                            <div 
+                              className="w-2 h-2 rounded-full mt-1.5 flex-shrink-0"
+                              style={{ backgroundColor: color }}
+                            />
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center justify-between mb-1">
+                                <span className="font-medium text-xs text-gray-700 truncate">
+                                  {trail.user.name}
+                                </span>
+                                <span className="text-xs text-gray-500 ml-2">{time}</span>
+                              </div>
+                              <div className="text-xs text-gray-500 font-mono">
+                                {pt.lat.toFixed(4)}, {pt.lng.toFixed(4)}
+                              </div>
+                              <div className="text-xs text-gray-400 mt-0.5">{date}</div>
+                            </div>
+                          </div>
+                        </li>
+                      );
+                    })
+                  ).sort((a, b) => {
+                    // Sort by timestamp descending (most recent first)
+                    const timeA = a.key?.split('-').pop() || '0';
+                    const timeB = b.key?.split('-').pop() || '0';
+                    return parseInt(timeB) - parseInt(timeA);
+                  })}
+                </ul>
+              )}
+            </div>
+          </div>
+
+          {/* Hospital Toggle */}
           <button
             onClick={() => setShowHospitals((prev) => !prev)}
-            className={`w-full mt-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors border ${
+            className={`w-full px-4 py-3 rounded-xl text-sm font-semibold transition-all border-2 ${
               showHospitals
-                ? 'bg-red-100 text-red-700 border-red-200 hover:bg-red-200'
-                : 'bg-gray-100 text-gray-700 border-gray-200 hover:bg-gray-200'
+                ? 'bg-gradient-to-r from-red-500 to-pink-500 text-white border-red-400 hover:from-red-600 hover:to-pink-600 shadow-md'
+                : 'bg-white text-gray-700 border-gray-200 hover:border-gray-300 hover:bg-gray-50'
             }`}
           >
             {showHospitals ? "Hide" : "Show"} Hospital Locations
@@ -274,63 +554,67 @@ const HeatmapDashboard: React.FC = () => {
 
       <div className="flex-1 flex flex-col">
         {/* Header */}
-        <div className="bg-white border-b border-gray-200 px-6 py-4 flex justify-between items-center">
-          <div className="flex items-center space-x-3">
-            <div className="bg-blue-500 p-2 rounded-lg">
-              <MapPin className="h-6 w-6 text-white" />
+        <div className="bg-white shadow-md px-6 py-5 flex justify-between items-center border-b-2 border-gray-100">
+          <div className="flex items-center space-x-4">
+            <div className="bg-gradient-to-br from-blue-500 to-blue-600 p-3 rounded-xl shadow-lg">
+              <MapPin className="h-7 w-7 text-white" />
             </div>
             <div>
-              <h1 className="text-2xl font-bold text-gray-900">Sales Person Heatmap</h1>
-              <p className="text-gray-600">Live tracking of field sales activities in Kenya</p>
+              <h1 className="text-3xl font-bold text-gray-900 tracking-tight">Sales Heatmap</h1>
+              <p className="text-gray-500 text-sm mt-0.5">Real-time field activity monitoring</p>
             </div>
           </div>
 
-          <div className="flex items-center space-x-4">
-            <div className="bg-gray-50 px-4 py-2 rounded-lg flex items-center space-x-2">
-              <Activity className="h-4 w-4 text-blue-500" />
-              <span className="text-sm font-medium text-gray-700">
-                {trails.reduce((acc, t) => acc + t.path.length, 0)} Active Points
-              </span>
-            </div>
+          <div className="flex items-center space-x-3">
             {lastUpdated && (
-              <div className="text-sm text-gray-500">
-                Last updated: {lastUpdated.toLocaleTimeString()}
+              <div className="bg-gray-50 px-4 py-2 rounded-lg border border-gray-200">
+                <div className="text-xs text-gray-500">Last updated</div>
+                <div className="text-sm font-semibold text-gray-700">
+                  {lastUpdated.toLocaleTimeString()}
+                </div>
               </div>
             )}
-            <div className="flex items-center space-x-2">
-              <button
-                onClick={toggleAutoRefresh}
-                className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                  autoRefresh
-                    ? 'bg-green-100 text-green-700 hover:bg-green-200'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
-              >
-                Auto: {autoRefresh ? 'ON' : 'OFF'}
-              </button>
-              <button
-                onClick={handleManualRefresh}
-                disabled={loading}
-                className="flex items-center space-x-2 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:opacity-50"
-              >
-                <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-                <span>Refresh</span>
-              </button>
-            </div>
+            <button
+              onClick={toggleLiveMode}
+              className={`flex items-center space-x-2 px-4 py-2.5 rounded-xl text-sm font-bold transition-all shadow-md border-2 ${
+                liveMode
+                  ? 'bg-gradient-to-r from-green-500 to-emerald-500 text-white border-green-400 hover:from-green-600 hover:to-emerald-600'
+                  : 'bg-white text-gray-700 border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+              }`}
+            >
+              <Radio className={`h-4 w-4 ${liveMode ? 'animate-pulse' : ''}`} />
+              <span>Live {liveMode ? 'ON' : 'OFF'}</span>
+            </button>
+            <button
+              onClick={handleManualRefresh}
+              disabled={loading}
+              className="flex items-center space-x-2 px-4 py-2.5 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-xl hover:from-blue-600 hover:to-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-md font-semibold text-sm"
+            >
+              <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+              <span>Refresh</span>
+            </button>
           </div>
         </div>
 
         {/* Map */}
-        <div className="relative h-[calc(100vh-100px)]">
+        <div className="relative h-[calc(100vh-140px)] bg-gray-100">
           {error && (
-            <div className="absolute top-4 left-1/2 transform -translate-x-1/2 z-[1000] bg-red-500 text-white px-6 py-3 rounded-lg shadow-lg">
-              <span className="font-medium">Error:</span> {error}
+            <div className="absolute top-4 left-1/2 transform -translate-x-1/2 z-[1000] bg-gradient-to-r from-red-500 to-red-600 text-white px-6 py-4 rounded-xl shadow-2xl border-2 border-red-400 max-w-md">
+              <div className="flex items-start space-x-3">
+                <div className="bg-white/20 p-1 rounded">
+                  <Activity className="h-5 w-5" />
+                </div>
+                <div>
+                  <div className="font-bold text-sm mb-1">Error Loading Data</div>
+                  <div className="text-sm opacity-90">{error}</div>
+                </div>
+              </div>
             </div>
           )}
           {loading && (
-            <div className="absolute top-4 right-4 z-[1000] bg-white px-4 py-2 rounded-lg shadow-lg flex items-center space-x-2">
-              <RefreshCw className="h-4 w-4 animate-spin text-blue-500" />
-              <span className="text-sm text-gray-700">Loading data...</span>
+            <div className="absolute top-4 right-4 z-[1000] bg-white px-5 py-3 rounded-xl shadow-xl border-2 border-blue-200 flex items-center space-x-3">
+              <RefreshCw className="h-5 w-5 animate-spin text-blue-500" />
+              <span className="text-sm font-semibold text-gray-700">Loading locations...</span>
             </div>
           )}
 
@@ -368,7 +652,7 @@ const HeatmapDashboard: React.FC = () => {
               const color = COLORS[userIdx % COLORS.length];
               return (
                 <React.Fragment key={trail.user.id}>
-                  {/* Draw trail as connected segments */}
+                  {/* Draw trail as connected segments in chronological order */}
                   {trail.path.map((pt, i) => {
                     if (i < trail.path.length - 1) {
                       const nextPt = trail.path[i + 1];
@@ -376,8 +660,8 @@ const HeatmapDashboard: React.FC = () => {
                         <Polyline
                           key={`${trail.user.id}-seg-${i}`}
                           positions={[
-                            [pt.lng, pt.lat], // swap
-                            [nextPt.lng, nextPt.lat] // swap
+                            [pt.lat, pt.lng], // Leaflet uses [lat, lng]
+                            [nextPt.lat, nextPt.lng]
                           ]}
                           pathOptions={{
                             color,
@@ -407,13 +691,24 @@ const HeatmapDashboard: React.FC = () => {
               );
             })}
           </MapContainer>
+          
           {/* Legend */}
-          <div className="absolute bottom-4 left-4 bg-white p-4 rounded-lg shadow-lg z-[1000]">
-            <h3 className="text-sm font-semibold text-gray-900 mb-2">Activity Intensity</h3>
-            <div className="flex items-center space-x-2">
-              <span className="text-xs text-gray-600">Low</span>
-              <div className="w-20 h-3 rounded-full bg-gradient-to-r from-blue-500 via-green-500 via-yellow-500 to-red-600"></div>
-              <span className="text-xs text-gray-600">High</span>
+          <div className="absolute bottom-6 left-6 bg-white/95 backdrop-blur-sm p-5 rounded-xl shadow-2xl z-[1000] border-2 border-gray-200">
+            <h3 className="text-sm font-bold text-gray-900 mb-3 flex items-center space-x-2">
+              <Activity className="h-4 w-4 text-blue-500" />
+              <span>Activity Intensity</span>
+            </h3>
+            <div className="flex items-center space-x-3">
+              <span className="text-xs font-medium text-gray-600">Low</span>
+              <div className="w-32 h-4 rounded-full bg-gradient-to-r from-blue-400 via-green-400 via-yellow-400 to-red-500 shadow-inner"></div>
+              <span className="text-xs font-medium text-gray-600">High</span>
+            </div>
+            <div className="mt-3 pt-3 border-t border-gray-200">
+              <div className="text-xs text-gray-500">
+                Total Distance: <span className="font-bold text-gray-700">
+                  {trails.reduce((sum, t) => sum + trailDistance(t.path), 0).toFixed(2)} km
+                </span>
+              </div>
             </div>
           </div>
         </div>
