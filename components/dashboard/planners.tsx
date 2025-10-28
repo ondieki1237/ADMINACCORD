@@ -13,7 +13,8 @@ import {
   FileText,
   TrendingUp,
   MapPin,
-  Car
+  Car,
+  Download
 } from 'lucide-react';
 import {
   fetchAdminPlanners,
@@ -26,6 +27,7 @@ import {
   formatWeekRange,
   type Planner
 } from '@/lib/plannerHelpers';
+import { generatePlannersSummaryPDF, generateIndividualPlannerPDF } from '@/lib/plannerPdfGenerator';
 
 export default function PlannersComponent() {
   const router = useRouter();
@@ -36,6 +38,7 @@ export default function PlannersComponent() {
   const [currentWeekStart, setCurrentWeekStart] = useState<Date>(new Date());
   const [sortBy, setSortBy] = useState<'date' | 'name'>('date');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+  const [generatingPdf, setGeneratingPdf] = useState(false);
   
   const weekRange = getWeekRange(currentWeekStart);
   const uniqueUsers = getUniquePlannerUsers(planners);
@@ -97,19 +100,53 @@ export default function PlannersComponent() {
     setCurrentWeekStart(new Date());
   };
 
+  const handleGenerateSummaryPDF = async () => {
+    try {
+      setGeneratingPdf(true);
+      const adminName = 'Admin'; // You can get this from auth context
+      const dateRange = {
+        from: new Date(weekRange.from),
+        to: new Date(weekRange.to)
+      };
+      await generatePlannersSummaryPDF(filteredPlanners, dateRange, adminName);
+    } catch (err) {
+      console.error('PDF generation error:', err);
+      setError('Failed to generate PDF');
+    } finally {
+      setGeneratingPdf(false);
+    }
+  };
+
+  const handleGenerateIndividualPDF = async (planner: Planner) => {
+    try {
+      setGeneratingPdf(true);
+      const adminName = 'Admin'; // You can get this from auth context
+      const dateRange = {
+        from: new Date(weekRange.from),
+        to: new Date(weekRange.to)
+      };
+      await generateIndividualPlannerPDF(planner, dateRange, adminName);
+    } catch (err) {
+      console.error('PDF generation error:', err);
+      setError('Failed to generate individual PDF');
+    } finally {
+      setGeneratingPdf(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 p-6">
       {/* Header */}
       <div className="mb-6">
         <button
           onClick={() => router.push('/')}
-          className="flex items-center space-x-2 text-blue-600 hover:text-blue-700 transition-colors mb-4"
+          className="flex items-center space-x-2 text-[#008cf7] hover:text-[#006bb8] transition-colors mb-4 font-medium"
         >
           <ArrowLeft className="h-5 w-5" />
           <span className="font-medium">Back to Home</span>
         </button>
         <div className="flex items-center space-x-4">
-          <div className="bg-gradient-to-br from-purple-500 to-purple-600 p-3 rounded-xl shadow-lg">
+          <div className="bg-gradient-to-br from-[#008cf7] to-[#006bb8] p-3 rounded-xl shadow-lg">
             <Calendar className="h-8 w-8 text-white" />
           </div>
           <div>
@@ -125,15 +162,26 @@ export default function PlannersComponent() {
         <div className="lg:col-span-2 bg-white rounded-xl shadow-lg border-2 border-gray-100 p-6">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center space-x-3">
-              <Calendar className="h-5 w-5 text-purple-600" />
+              <Calendar className="h-5 w-5 text-[#008cf7]" />
               <h2 className="text-lg font-bold text-gray-900">Week Selection</h2>
             </div>
-            <button
-              onClick={goToCurrentWeek}
-              className="text-sm text-blue-600 hover:text-blue-700 font-medium"
-            >
-              Current Week
-            </button>
+            <div className="flex items-center space-x-3">
+              <button
+                onClick={handleGenerateSummaryPDF}
+                disabled={generatingPdf || filteredPlanners.length === 0}
+                className="flex items-center space-x-2 px-4 py-2 bg-black text-white rounded-lg hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm font-medium shadow-md"
+                title="Download Summary PDF"
+              >
+                <Download className="h-4 w-4" />
+                <span>Summary PDF</span>
+              </button>
+              <button
+                onClick={goToCurrentWeek}
+                className="text-sm text-[#008cf7] hover:text-[#006bb8] font-medium transition-colors"
+              >
+                Current Week
+              </button>
+            </div>
           </div>
           
           <div className="flex items-center justify-between">
@@ -190,7 +238,7 @@ export default function PlannersComponent() {
             <select
               value={selectedUserId || ''}
               onChange={(e) => setSelectedUserId(e.target.value || null)}
-              className="border-2 border-gray-200 rounded-lg px-4 py-2 text-sm font-medium bg-white hover:border-gray-300 focus:border-purple-500 focus:ring-2 focus:ring-purple-200 transition-all"
+              className="border-2 border-gray-200 rounded-lg px-4 py-2 text-sm font-medium bg-white hover:border-gray-300 focus:border-[#008cf7] focus:ring-2 focus:ring-[#008cf7]/20 transition-all"
             >
               <option value="">All Users</option>
               {uniqueUsers.map(user => (
@@ -221,7 +269,7 @@ export default function PlannersComponent() {
             <button
               onClick={fetchPlanners}
               disabled={loading}
-              className="p-2 bg-purple-500 text-white rounded-lg hover:bg-purple-600 disabled:opacity-50"
+              className="p-2 bg-[#008cf7] text-white rounded-lg hover:bg-[#006bb8] disabled:opacity-50 transition-colors shadow-md"
             >
               <RefreshCw className={`h-5 w-5 ${loading ? 'animate-spin' : ''}`} />
             </button>
@@ -239,7 +287,7 @@ export default function PlannersComponent() {
       {/* Loading State */}
       {loading && (
         <div className="text-center py-12">
-          <RefreshCw className="h-12 w-12 animate-spin text-purple-600 mx-auto mb-4" />
+          <RefreshCw className="h-12 w-12 animate-spin text-[#008cf7] mx-auto mb-4" />
           <p className="text-gray-600">Loading planners...</p>
         </div>
       )}
@@ -261,7 +309,7 @@ export default function PlannersComponent() {
             return (
               <div key={planner._id} className="bg-white rounded-xl shadow-lg border-2 border-gray-100 overflow-hidden">
                 {/* Planner Header */}
-                <div className="bg-gradient-to-r from-purple-50 to-indigo-50 border-b-2 border-gray-100 p-6">
+                <div className="bg-gradient-to-r from-[#008cf7]/10 to-[#006bb8]/10 border-b-2 border-gray-100 p-6">
                   <div className="flex items-start justify-between">
                     <div>
                       <h3 className="text-xl font-bold text-gray-900">
@@ -271,22 +319,33 @@ export default function PlannersComponent() {
                         {planner.userId.employeeId} • {planner.userId.email}
                       </p>
                     </div>
-                    <div className="text-right">
-                      <div className="text-sm text-gray-600 mb-1">Weekly Allowance</div>
-                      <div className="text-2xl font-bold text-green-600">
-                        {new Intl.NumberFormat('en-KE', {
-                          style: 'currency',
-                          currency: 'KES',
-                          minimumFractionDigits: 0
-                        }).format(weeklyAllowance)}
+                    <div className="text-right flex items-start space-x-3">
+                      <button
+                        onClick={() => handleGenerateIndividualPDF(planner)}
+                        disabled={generatingPdf}
+                        className="flex items-center space-x-2 px-3 py-2 bg-black text-white rounded-lg hover:bg-gray-800 disabled:opacity-50 transition-colors text-sm font-medium shadow-md"
+                        title="Download Individual PDF"
+                      >
+                        <Download className="h-4 w-4" />
+                        <span className="hidden sm:inline">PDF</span>
+                      </button>
+                      <div>
+                        <div className="text-sm text-gray-600 mb-1">Weekly Allowance</div>
+                        <div className="text-2xl font-bold text-green-600">
+                          {new Intl.NumberFormat('en-KE', {
+                            style: 'currency',
+                            currency: 'KES',
+                            minimumFractionDigits: 0
+                          }).format(weeklyAllowance)}
+                        </div>
                       </div>
                     </div>
                   </div>
                   
                   {planner.notes && (
-                    <div className="mt-4 p-3 bg-white/50 rounded-lg border border-purple-100">
+                    <div className="mt-4 p-3 bg-white/50 rounded-lg border border-[#008cf7]/20">
                       <div className="flex items-start space-x-2">
-                        <FileText className="h-4 w-4 text-purple-600 mt-0.5 flex-shrink-0" />
+                        <FileText className="h-4 w-4 text-[#008cf7] mt-0.5 flex-shrink-0" />
                         <p className="text-sm text-gray-700">{planner.notes}</p>
                       </div>
                     </div>

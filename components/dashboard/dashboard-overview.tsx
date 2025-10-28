@@ -535,8 +535,8 @@ export function DashboardOverview() {
       {/* Top toolbar */}
       <div className="flex items-center justify-between gap-4">
         <div className="flex items-center gap-4">
-          <div className="p-3 rounded-xl bg-gradient-to-r from-primary/20 to-primary/10 shadow-md">
-            <MapPin className="h-6 w-6 text-primary" />
+          <div className="p-3 rounded-xl bg-gradient-to-r from-[#008cf7] to-[#006bb8] shadow-lg">
+            <MapPin className="h-6 w-6 text-white" />
           </div>
           <div>
             <h1 className="text-2xl font-extrabold text-gray-900">Dashboard</h1>
@@ -548,7 +548,7 @@ export function DashboardOverview() {
           <div className="hidden sm:flex items-center gap-2">
             <Button
               variant="ghost"
-              className="flex items-center gap-2 px-3 py-2 rounded-md transition transform hover:scale-105"
+              className="flex items-center gap-2 px-3 py-2 rounded-md transition transform hover:scale-105 hover:bg-[#008cf7]/10"
               onClick={() => setShowReports(true)}
             >
               <BarChart3 className="h-4 w-4" />
@@ -557,7 +557,7 @@ export function DashboardOverview() {
 
             <Button
               variant="ghost"
-              className="flex items-center gap-2 px-3 py-2 rounded-md transition transform hover:scale-105 bg-gradient-to-r from-primary/10 to-primary/5"
+              className="flex items-center gap-2 px-3 py-2 rounded-md transition transform hover:scale-105 bg-gradient-to-r from-[#008cf7]/10 to-[#006bb8]/10"
               onClick={() => setShowPerformance(true)}
             >
               <TrendingUp className="h-4 w-4" />
@@ -566,7 +566,7 @@ export function DashboardOverview() {
 
             <Button
               variant="ghost"
-              className="flex items-center gap-2 px-3 py-2 rounded-md transition transform hover:scale-105"
+              className="flex items-center gap-2 px-3 py-2 rounded-md transition transform hover:scale-105 hover:bg-[#008cf7]/10"
               onClick={() => setShowVisits(true)}
             >
               <Clock className="h-4 w-4" />
@@ -575,7 +575,7 @@ export function DashboardOverview() {
 
             <Button
               variant="ghost"
-              className="flex items-center gap-2 px-3 py-2 rounded-md transition transform hover:scale-105"
+              className="flex items-center gap-2 px-3 py-2 rounded-md transition transform hover:scale-105 hover:bg-[#008cf7]/10"
               onClick={() => setShowQuotations(true)}
             >
               <FileText className="h-4 w-4" />
@@ -583,7 +583,7 @@ export function DashboardOverview() {
             </Button>
             <Button
               variant="ghost"
-              className="flex items-center gap-2 px-3 py-2 rounded-md transition transform hover:scale-105"
+              className="flex items-center gap-2 px-3 py-2 rounded-md transition transform hover:scale-105 hover:bg-[#008cf7]/10"
               onClick={() => setShowEngineerReports(true)}
             >
               <FileText className="h-4 w-4" />
@@ -592,7 +592,7 @@ export function DashboardOverview() {
 
             <Button
               variant="ghost"
-              className="flex items-center gap-2 px-3 py-2 rounded-md transition transform hover:scale-105 bg-black text-white hover:bg-gray-800"
+              className="flex items-center gap-2 px-3 py-2 rounded-md transition transform hover:scale-105 bg-black text-white hover:bg-gray-800 shadow-md"
               onClick={() => window.location.href = "/dashboard/planners"}
             >
               <Calendar className="h-4 w-4" />
@@ -602,7 +602,7 @@ export function DashboardOverview() {
 
           <Button
             variant="outline"
-            className="ml-2 hidden sm:inline-flex"
+            className="ml-2 hidden sm:inline-flex hover:bg-[#008cf7]/10 hover:border-[#008cf7] transition-colors"
             onClick={() => window.location.reload()}
             title="Refresh dashboard"
           >
@@ -674,19 +674,19 @@ export function DashboardOverview() {
           </CardHeader>
           <CardContent>
             <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <div className="bg-white/60 p-4 rounded-xl shadow-sm border border-gray-100 transition transform hover:scale-[1.02]">
+              <div className="bg-white/60 p-4 rounded-xl shadow-sm border border-gray-100 transition transform hover:scale-[1.02] hover:shadow-md">
                 <div className="text-xs font-semibold text-gray-500">Total Visits</div>
-                <div className="mt-2 text-2xl font-bold text-gray-900">{totalVisits}</div>
+                <div className="mt-2 text-2xl font-bold text-[#008cf7]">{totalVisits}</div>
                 <div className="text-xs text-green-600 mt-1">This period</div>
               </div>
-              <div className="bg-white/60 p-4 rounded-xl shadow-sm border border-gray-100 transition transform hover:scale-[1.02]">
+              <div className="bg-white/60 p-4 rounded-xl shadow-sm border border-gray-100 transition transform hover:scale-[1.02] hover:shadow-md">
                 <div className="text-xs font-semibold text-gray-500">Total Trails</div>
-                <div className="mt-2 text-2xl font-bold text-gray-900">{totalTrails}</div>
+                <div className="mt-2 text-2xl font-bold text-[#008cf7]">{totalTrails}</div>
                 <div className="text-xs text-gray-500 mt-1">Distance: {totalTrailDistance.toFixed(2)} km</div>
               </div>
-              <div className="bg-white/60 p-4 rounded-xl shadow-sm border border-gray-100 transition transform hover:scale-[1.02]">
+              <div className="bg-white/60 p-4 rounded-xl shadow-sm border border-gray-100 transition transform hover:scale-[1.02] hover:shadow-md">
                 <div className="text-xs font-semibold text-gray-500">Avg Visit Duration</div>
-                <div className="mt-2 text-2xl font-bold text-gray-900">{averageDuration}m</div>
+                <div className="mt-2 text-2xl font-bold text-[#008cf7]">{averageDuration}m</div>
                 <div className="text-xs text-gray-500 mt-1">Per visit</div>
               </div>
             </div>
@@ -703,7 +703,7 @@ export function DashboardOverview() {
               {canViewHeatmap(currentUser) && (
                 <Button
                   variant="outline"
-                  className="w-full justify-start gap-2 transition transform hover:scale-105"
+                  className="w-full justify-start gap-2 transition transform hover:scale-105 hover:bg-[#008cf7]/10 hover:border-[#008cf7]"
                   onClick={() => (window.location.href = "/dashboard/sales-heatmap")}
                 >
                   <BarChart3 className="h-4 w-4" />
@@ -712,7 +712,7 @@ export function DashboardOverview() {
               )}
               <Button
                 variant="outline"
-                className="w-full justify-start gap-2 transition transform hover:scale-105"
+                className="w-full justify-start gap-2 transition transform hover:scale-105 hover:bg-[#008cf7]/10 hover:border-[#008cf7]"
                 onClick={() => (window.location.href = "/dashboard/user-manager")}
               >
                 <Users className="h-4 w-4" />
@@ -720,7 +720,7 @@ export function DashboardOverview() {
               </Button>
               <Button
                 variant="outline"
-                className="w-full justify-start gap-2 transition transform hover:scale-105"
+                className="w-full justify-start gap-2 transition transform hover:scale-105 hover:bg-[#008cf7]/10 hover:border-[#008cf7]"
                 onClick={() => (window.location.href = "/dashboard/advanced-analytics")}
               >
                 <TrendingUp className="h-4 w-4" />
@@ -728,7 +728,7 @@ export function DashboardOverview() {
               </Button>
               <Button
                 variant="outline"
-                className="w-full justify-start gap-2 transition transform hover:scale-105 bg-black text-white hover:bg-gray-800 border-black"
+                className="w-full justify-start gap-2 transition transform hover:scale-105 bg-black text-white hover:bg-gray-800 border-black shadow-md"
                 onClick={() => (window.location.href = "/dashboard/planners")}
               >
                 <Calendar className="h-4 w-4" />
@@ -739,7 +739,7 @@ export function DashboardOverview() {
               <div className="relative">
                 <Button
                   variant="outline"
-                  className="w-full justify-start gap-2 transition transform hover:scale-105 bg-primary/5"
+                  className="w-full justify-start gap-2 transition transform hover:scale-105 bg-[#008cf7]/10 hover:bg-[#008cf7]/20 border-[#008cf7]/30"
                   onClick={() => setShowDownloadMenu(!showDownloadMenu)}
                 >
                   <Download className="h-4 w-4" />
@@ -753,9 +753,12 @@ export function DashboardOverview() {
 
       {/* Charts area */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <Card className="col-span-2 p-4 rounded-2xl shadow-md transition transform hover:scale-[1.01]">
+        <Card className="col-span-2 p-4 rounded-2xl shadow-md transition transform hover:scale-[1.01] border-2 border-gray-100">
           <CardHeader>
-            <CardTitle>Performance Trends</CardTitle>
+            <CardTitle className="flex items-center gap-2">
+              <TrendingUp className="h-5 w-5 text-[#008cf7]" />
+              Performance Trends
+            </CardTitle>
             <CardDescription>Visits vs Trails over time</CardDescription>
           </CardHeader>
           <CardContent className="h-72">
@@ -780,9 +783,12 @@ export function DashboardOverview() {
           </CardContent>
         </Card>
 
-        <Card className="p-4 rounded-2xl shadow-md transition transform hover:scale-[1.01]">
+        <Card className="p-4 rounded-2xl shadow-md transition transform hover:scale-[1.01] border-2 border-gray-100">
           <CardHeader>
-            <CardTitle>Sales Rep Activity</CardTitle>
+            <CardTitle className="flex items-center gap-2">
+              <BarChart3 className="h-5 w-5 text-[#008cf7]" />
+              Sales Rep Activity
+            </CardTitle>
             <CardDescription>Top performers</CardDescription>
           </CardHeader>
           <CardContent className="h-72">
@@ -808,30 +814,30 @@ export function DashboardOverview() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-6">
           {hasAdminAccess(currentUser) && (
-            <Card className="p-4 rounded-2xl shadow-md transition transform hover:-translate-y-1">
+            <Card className="p-4 rounded-2xl shadow-md transition transform hover:-translate-y-1 border-2 border-gray-100">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <Shield className="h-4 w-4" />
+                  <Shield className="h-4 w-4 text-[#008cf7]" />
                   Admin Features
                 </CardTitle>
                 <CardDescription>Super user tools and analytics</CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                  <Button variant="ghost" className="flex-col items-start gap-2 p-3 rounded-lg transition hover:bg-gray-50">
-                    <Users className="h-5 w-5" />
+                  <Button variant="ghost" className="flex-col items-start gap-2 p-3 rounded-lg transition hover:bg-[#008cf7]/10">
+                    <Users className="h-5 w-5 text-[#008cf7]" />
                     <div className="text-xs">Manage Users</div>
                   </Button>
-                  <Button variant="ghost" className="flex-col items-start gap-2 p-3 rounded-lg transition hover:bg-gray-50">
-                    <TrendingUp className="h-5 w-5" />
+                  <Button variant="ghost" className="flex-col items-start gap-2 p-3 rounded-lg transition hover:bg-[#008cf7]/10">
+                    <TrendingUp className="h-5 w-5 text-[#008cf7]" />
                     <div className="text-xs">Analytics</div>
                   </Button>
-                  <Button variant="ghost" className="flex-col items-start gap-2 p-3 rounded-lg transition hover:bg-gray-50">
-                    <FileText className="h-5 w-5" />
+                  <Button variant="ghost" className="flex-col items-start gap-2 p-3 rounded-lg transition hover:bg-[#008cf7]/10">
+                    <FileText className="h-5 w-5 text-[#008cf7]" />
                     <div className="text-xs">Reports</div>
                   </Button>
-                  <Button variant="ghost" className="flex-col items-start gap-2 p-3 rounded-lg transition hover:bg-gray-50">
-                    <MapPin className="h-5 w-5" />
+                  <Button variant="ghost" className="flex-col items-start gap-2 p-3 rounded-lg transition hover:bg-[#008cf7]/10">
+                    <MapPin className="h-5 w-5 text-[#008cf7]" />
                     <div className="text-xs">Heatmap</div>
                   </Button>
                 </div>
@@ -843,31 +849,37 @@ export function DashboardOverview() {
         </div>
 
         <div className="space-y-6">
-          <Card className="p-4 rounded-2xl shadow-md transition transform hover:scale-[1.01]">
+          <Card className="p-4 rounded-2xl shadow-md transition transform hover:scale-[1.01] border-2 border-gray-100">
             <CardHeader>
-              <CardTitle>Summary</CardTitle>
+              <CardTitle className="flex items-center gap-2">
+                <FileText className="h-4 w-4 text-[#008cf7]" />
+                Summary
+              </CardTitle>
               <CardDescription>Key metrics at a glance</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-2 gap-3">
                 <div className="text-sm text-gray-500">Completion</div>
-                <div className="text-sm font-semibold">{Math.round(data?.performance.completionRate || 0)}%</div>
+                <div className="text-sm font-semibold text-[#008cf7]">{Math.round(data?.performance.completionRate || 0)}%</div>
 
                 <div className="text-sm text-gray-500">Avg Visit</div>
-                <div className="text-sm font-semibold">{Math.round(data?.performance.averageVisitDuration || 0)}m</div>
+                <div className="text-sm font-semibold text-[#008cf7]">{Math.round(data?.performance.averageVisitDuration || 0)}m</div>
 
                 <div className="text-sm text-gray-500">Trails This Month</div>
-                <div className="text-sm font-semibold">{data?.performance.trailsThisMonth ?? 0}</div>
+                <div className="text-sm font-semibold text-[#008cf7]">{data?.performance.trailsThisMonth ?? 0}</div>
 
                 <div className="text-sm text-gray-500">Visits This Month</div>
-                <div className="text-sm font-semibold">{data?.performance.visitsThisMonth ?? 0}</div>
+                <div className="text-sm font-semibold text-[#008cf7]">{data?.performance.visitsThisMonth ?? 0}</div>
               </div>
             </CardContent>
           </Card>
 
-          <Card className="p-4 rounded-2xl shadow-md">
+          <Card className="p-4 rounded-2xl shadow-md border-2 border-gray-100">
             <CardHeader>
-              <CardTitle>Heatmap Insight</CardTitle>
+              <CardTitle className="flex items-center gap-2">
+                <MapPin className="h-4 w-4 text-[#008cf7]" />
+                Heatmap Insight
+              </CardTitle>
               <CardDescription>Activity intensity</CardDescription>
             </CardHeader>
             <CardContent>
