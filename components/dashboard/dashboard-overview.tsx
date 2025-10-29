@@ -548,7 +548,7 @@ export function DashboardOverview() {
           <div className="hidden sm:flex items-center gap-2">
             <Button
               variant="ghost"
-              className="flex items-center gap-2 px-3 py-2 rounded-md transition transform hover:scale-105 hover:bg-[#008cf7]/10"
+              className="flex items-center gap-2 px-3 py-2 rounded-md transition transform hover:scale-105 hover:bg-[#008cf7]/10 hover:text-[#008cf7] text-gray-700"
               onClick={() => setShowReports(true)}
             >
               <BarChart3 className="h-4 w-4" />
@@ -557,7 +557,7 @@ export function DashboardOverview() {
 
             <Button
               variant="ghost"
-              className="flex items-center gap-2 px-3 py-2 rounded-md transition transform hover:scale-105 bg-gradient-to-r from-[#008cf7]/10 to-[#006bb8]/10"
+              className="flex items-center gap-2 px-3 py-2 rounded-md transition transform hover:scale-105 bg-gradient-to-r from-[#008cf7]/10 to-[#006bb8]/10 hover:text-[#008cf7] text-gray-700"
               onClick={() => setShowPerformance(true)}
             >
               <TrendingUp className="h-4 w-4" />
@@ -566,7 +566,7 @@ export function DashboardOverview() {
 
             <Button
               variant="ghost"
-              className="flex items-center gap-2 px-3 py-2 rounded-md transition transform hover:scale-105 hover:bg-[#008cf7]/10"
+              className="flex items-center gap-2 px-3 py-2 rounded-md transition transform hover:scale-105 hover:bg-[#008cf7]/10 hover:text-[#008cf7] text-gray-700"
               onClick={() => setShowVisits(true)}
             >
               <Clock className="h-4 w-4" />
@@ -575,7 +575,7 @@ export function DashboardOverview() {
 
             <Button
               variant="ghost"
-              className="flex items-center gap-2 px-3 py-2 rounded-md transition transform hover:scale-105 hover:bg-[#008cf7]/10"
+              className="flex items-center gap-2 px-3 py-2 rounded-md transition transform hover:scale-105 hover:bg-[#008cf7]/10 hover:text-[#008cf7] text-gray-700"
               onClick={() => setShowQuotations(true)}
             >
               <FileText className="h-4 w-4" />
@@ -583,7 +583,7 @@ export function DashboardOverview() {
             </Button>
             <Button
               variant="ghost"
-              className="flex items-center gap-2 px-3 py-2 rounded-md transition transform hover:scale-105 hover:bg-[#008cf7]/10"
+              className="flex items-center gap-2 px-3 py-2 rounded-md transition transform hover:scale-105 hover:bg-[#008cf7]/10 hover:text-[#008cf7] text-gray-700"
               onClick={() => setShowEngineerReports(true)}
             >
               <FileText className="h-4 w-4" />
@@ -602,7 +602,7 @@ export function DashboardOverview() {
 
           <Button
             variant="outline"
-            className="ml-2 hidden sm:inline-flex hover:bg-[#008cf7]/10 hover:border-[#008cf7] transition-colors"
+            className="ml-2 hidden sm:inline-flex hover:bg-[#008cf7]/10 hover:border-[#008cf7] hover:text-[#008cf7] transition-colors text-gray-700"
             onClick={() => window.location.reload()}
             title="Refresh dashboard"
           >
@@ -703,7 +703,7 @@ export function DashboardOverview() {
               {canViewHeatmap(currentUser) && (
                 <Button
                   variant="outline"
-                  className="w-full justify-start gap-2 transition transform hover:scale-105 hover:bg-[#008cf7]/10 hover:border-[#008cf7]"
+                  className="w-full justify-start gap-2 transition transform hover:scale-105 hover:bg-[#008cf7]/10 hover:border-[#008cf7] hover:text-[#008cf7] text-gray-700"
                   onClick={() => (window.location.href = "/dashboard/sales-heatmap")}
                 >
                   <BarChart3 className="h-4 w-4" />
@@ -712,7 +712,7 @@ export function DashboardOverview() {
               )}
               <Button
                 variant="outline"
-                className="w-full justify-start gap-2 transition transform hover:scale-105 hover:bg-[#008cf7]/10 hover:border-[#008cf7]"
+                className="w-full justify-start gap-2 transition transform hover:scale-105 hover:bg-[#008cf7]/10 hover:border-[#008cf7] hover:text-[#008cf7] text-gray-700"
                 onClick={() => (window.location.href = "/dashboard/user-manager")}
               >
                 <Users className="h-4 w-4" />
@@ -720,7 +720,7 @@ export function DashboardOverview() {
               </Button>
               <Button
                 variant="outline"
-                className="w-full justify-start gap-2 transition transform hover:scale-105 hover:bg-[#008cf7]/10 hover:border-[#008cf7]"
+                className="w-full justify-start gap-2 transition transform hover:scale-105 hover:bg-[#008cf7]/10 hover:border-[#008cf7] hover:text-[#008cf7] text-gray-700"
                 onClick={() => (window.location.href = "/dashboard/advanced-analytics")}
               >
                 <TrendingUp className="h-4 w-4" />
@@ -739,7 +739,7 @@ export function DashboardOverview() {
               <div className="relative">
                 <Button
                   variant="outline"
-                  className="w-full justify-start gap-2 transition transform hover:scale-105 bg-[#008cf7]/10 hover:bg-[#008cf7]/20 border-[#008cf7]/30"
+                  className="w-full justify-start gap-2 transition transform hover:scale-105 bg-[#008cf7]/10 hover:bg-[#008cf7]/20 border-[#008cf7]/30 text-[#008cf7] hover:text-[#006bb8]"
                   onClick={() => setShowDownloadMenu(!showDownloadMenu)}
                 >
                   <Download className="h-4 w-4" />
@@ -824,19 +824,19 @@ export function DashboardOverview() {
               </CardHeader>
               <CardContent>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                  <Button variant="ghost" className="flex-col items-start gap-2 p-3 rounded-lg transition hover:bg-[#008cf7]/10">
+                  <Button variant="ghost" className="flex-col items-start gap-2 p-3 rounded-lg transition hover:bg-[#008cf7]/10 hover:text-[#008cf7] text-gray-700">
                     <Users className="h-5 w-5 text-[#008cf7]" />
                     <div className="text-xs">Manage Users</div>
                   </Button>
-                  <Button variant="ghost" className="flex-col items-start gap-2 p-3 rounded-lg transition hover:bg-[#008cf7]/10">
+                  <Button variant="ghost" className="flex-col items-start gap-2 p-3 rounded-lg transition hover:bg-[#008cf7]/10 hover:text-[#008cf7] text-gray-700">
                     <TrendingUp className="h-5 w-5 text-[#008cf7]" />
                     <div className="text-xs">Analytics</div>
                   </Button>
-                  <Button variant="ghost" className="flex-col items-start gap-2 p-3 rounded-lg transition hover:bg-[#008cf7]/10">
+                  <Button variant="ghost" className="flex-col items-start gap-2 p-3 rounded-lg transition hover:bg-[#008cf7]/10 hover:text-[#008cf7] text-gray-700">
                     <FileText className="h-5 w-5 text-[#008cf7]" />
                     <div className="text-xs">Reports</div>
                   </Button>
-                  <Button variant="ghost" className="flex-col items-start gap-2 p-3 rounded-lg transition hover:bg-[#008cf7]/10">
+                  <Button variant="ghost" className="flex-col items-start gap-2 p-3 rounded-lg transition hover:bg-[#008cf7]/10 hover:text-[#008cf7] text-gray-700">
                     <MapPin className="h-5 w-5 text-[#008cf7]" />
                     <div className="text-xs">Heatmap</div>
                   </Button>
