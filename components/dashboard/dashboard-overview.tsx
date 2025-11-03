@@ -214,11 +214,11 @@ export function DashboardOverview() {
   const visitsResDocs = data?.overview?.visits || []; // If you have visits by date, else use your fetched docs
   const trailsDocs = Array.isArray(trailsData) ? trailsData : [];
 
-  // Collect all unique dates from both datasets
+  // Collect all unique dates from both datasets and sort chronologically (oldest to latest)
   const allDatesSet = new Set<string>();
   visitsResDocs.forEach((v: any) => v.date && allDatesSet.add(v.date.slice(0, 10)));
   trailsDocs.forEach((t: any) => t.date && allDatesSet.add(t.date.slice(0, 10)));
-  const allDates = Array.from(allDatesSet).sort();
+  const allDates = Array.from(allDatesSet).sort((a, b) => a.localeCompare(b)); // Sort oldest to latest
 
   // Count visits and trails per date
   const visitsByDate: Record<string, number> = {};
@@ -259,13 +259,21 @@ export function DashboardOverview() {
     ],
   };
 
-  // Sales Heatmap chart data
+  // Sales Heatmap chart data - sort by timestamp (oldest to latest)
+  const sortedSalesHeatmap = salesHeatmap 
+    ? [...salesHeatmap].sort((a: any, b: any) => {
+        const dateA = new Date(a.timestamp || a.date || a.createdAt || 0).getTime();
+        const dateB = new Date(b.timestamp || b.date || b.createdAt || 0).getTime();
+        return dateA - dateB; // Oldest to latest
+      })
+    : [];
+
   const salesHeatmapChartData = {
-    labels: salesHeatmap?.map((item: any) => `${item.userName} (${item.location})`) || [],
+    labels: sortedSalesHeatmap.map((item: any) => `${item.userName} (${item.location})`),
     datasets: [
       {
         label: "Sales Activity",
-        data: salesHeatmap?.map((item: any) => item.count) || [],
+        data: sortedSalesHeatmap.map((item: any) => item.count),
         backgroundColor: "hsl(var(--primary)/0.5)",
       },
     ],
