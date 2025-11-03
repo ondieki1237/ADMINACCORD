@@ -174,11 +174,82 @@ class ApiService {
     return this.makeRequest(`/engineering-services/${encodeURIComponent(serviceId)}`);
   }
 
-  async assignEngineeringService(serviceId: string, payload: any): Promise<any> {
-    // Use POST /:id/assign as suggested
-    return this.makeRequest(`/engineering-services/${encodeURIComponent(serviceId)}/assign`, {
+  async createEngineeringService(payload: {
+    date?: string;
+    facility: { name: string; location: string };
+    serviceType: string;
+    engineerInCharge: { _id?: string; name: string; phone?: string };
+    machineDetails?: string;
+    status?: string;
+    notes?: string;
+    scheduledDate?: string;
+    conditionBefore?: string;
+    conditionAfter?: string;
+  }): Promise<any> {
+    return this.makeRequest(`/engineering-services`, {
       method: "POST",
       body: JSON.stringify(payload),
+    });
+  }
+
+  async updateEngineeringService(serviceId: string, payload: {
+    engineerInCharge?: { _id?: string; name: string; phone?: string };
+    scheduledDate?: string;
+    status?: string;
+    notes?: string;
+    conditionBefore?: string;
+    conditionAfter?: string;
+    machineDetails?: string;
+    otherPersonnel?: string[];
+    nextServiceDate?: string;
+  }): Promise<any> {
+    return this.makeRequest(`/engineering-services/${encodeURIComponent(serviceId)}`, {
+      method: "PUT",
+      body: JSON.stringify(payload),
+    });
+  }
+
+  async deleteEngineeringService(serviceId: string): Promise<any> {
+    return this.makeRequest(`/engineering-services/${encodeURIComponent(serviceId)}`, {
+      method: "DELETE",
+    });
+  }
+
+  async assignEngineeringService(serviceId: string, payload: any): Promise<any> {
+    // Use PUT /:id for assignment (compatible with updateEngineeringService)
+    return this.updateEngineeringService(serviceId, payload);
+  }
+
+  // Get all users (for engineer selection)
+  async getUsers(filters: Record<string, any> = {}): Promise<any> {
+    const params = new URLSearchParams();
+    Object.entries(filters).forEach(([k, v]) => {
+      if (v !== undefined && v !== null && v !== "") params.set(k, String(v));
+    });
+    const queryString = params.toString();
+    return this.makeRequest(`/users${queryString ? `?${queryString}` : ''}`);
+  }
+
+  // Get users by role
+  async getUsersByRole(role: string): Promise<any> {
+    return this.getUsers({ role });
+  }
+
+  // Get all engineers
+  async getEngineers(): Promise<any> {
+    return this.getUsers({ role: 'engineer' });
+  }
+
+  // Trail route snapping
+  async snapTrailToRoads(trailId: string): Promise<any> {
+    return this.makeRequest(`/trails/${trailId}/snap-route`, {
+      method: "POST",
+    });
+  }
+
+  async batchSnapAllTrails(): Promise<any> {
+    return this.makeRequest('/trails/snap-all-routes', {
+      method: "POST",
     });
   }
 

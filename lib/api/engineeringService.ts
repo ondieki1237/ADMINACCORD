@@ -12,8 +12,38 @@ export async function getServiceById(serviceId: string) {
   return apiService.getEngineeringServiceById(serviceId)
 }
 
+export async function createService(payload: any) {
+  return apiService.createEngineeringService(payload)
+}
+
+export async function updateService(serviceId: string, payload: any) {
+  return apiService.updateEngineeringService(serviceId, payload)
+}
+
+export async function deleteService(serviceId: string) {
+  return apiService.deleteEngineeringService(serviceId)
+}
+
 export async function assignService(serviceId: string, payload: any) {
   return apiService.assignEngineeringService(serviceId, payload)
 }
 
-export default { listServices, listServicesByEngineer, getServiceById, assignService }
+export async function getEngineers() {
+  return apiService.getEngineers()
+}
+
+export async function getUsers(filters?: Record<string, any>) {
+  return apiService.getUsers(filters || {})
+}
+
+export default { 
+  listServices, 
+  listServicesByEngineer, 
+  getServiceById, 
+  createService,
+  updateService,
+  deleteService,
+  assignService,
+  getEngineers,
+  getUsers
+}

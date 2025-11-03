@@ -1,5 +1,26 @@
 "use client";
 
+import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { MapContainer, TileLayer, Polyline, Marker, Popup, useMap } from 'react-leaflet';
+import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
+import 'leaflet.heat';
+import { RefreshCw, MapPin, Activity, Radio, ArrowLeft, Calendar, Clock, Users, Navigation } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import HospitalLayer from "./HospitalLayer";
+import { 
+  fetchAdminTracks, 
+  flattenAndSortPoints, 
+  startPollingTracks, 
+  type LocationTrack 
+} from '@/lib/locationStream';
+import {
+  snapTrailToRoads,
+  formatDistance,
+  formatDuration,
+  cleanCoordinates
+} from '@/lib/routeSnapping';
+
 // Haversine formula to calculate distance between two lat/lng points in km
 function haversineDistance(lat1: number, lng1: number, lat2: number, lng2: number) {
   const toRad = (x: number) => (x * Math.PI) / 180;
@@ -22,6 +43,7 @@ function trailDistance(path: TrailPoint[]): number {
   }
   return dist;
 }
+
 // Color palette for polylines
 const COLORS = [
   '#2563eb', // blue-600
@@ -33,20 +55,6 @@ const COLORS = [
   '#0ea5e9', // sky-500
   '#eab308', // amber-500
 ];
-import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { MapContainer, TileLayer, Polyline, Marker, Popup, useMap } from 'react-leaflet';
-import L from 'leaflet';
-import 'leaflet/dist/leaflet.css';
-import 'leaflet.heat';
-import { RefreshCw, MapPin, Activity, Radio, ArrowLeft, Calendar, Clock, Users } from 'lucide-react';
-import { useRouter } from 'next/navigation';
-import HospitalLayer from "./HospitalLayer";
-import { 
-  fetchAdminTracks, 
-  flattenAndSortPoints, 
-  startPollingTracks, 
-  type LocationTrack 
-} from '@/lib/locationStream';
 
 // Extend the Leaflet Map type to include heatLayer
 declare module 'leaflet' {
@@ -77,6 +85,12 @@ interface UserInfo {
 interface Trail {
   user: UserInfo;
   path: TrailPoint[];
+  snappedRoute?: {
+    coordinates: [number, number][]; // [lng, lat]
+    distance: number; // meters
+    duration: number; // seconds
+  };
+  isSnapping?: boolean; // Loading state
 }
 
 interface ApiResponse {
@@ -137,6 +151,8 @@ const HeatmapDashboard: React.FC = () => {
   const [showHospitals, setShowHospitals] = useState<boolean>(true);
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [selectedDay, setSelectedDay] = useState<string>('today');
+  const [snapToRoads, setSnapToRoads] = useState<boolean>(false);
+  const [snappingProgress, setSnappingProgress] = useState<{ current: number; total: number } | null>(null);
   
   const pollingStopperRef = useRef<(() => void) | null>(null);
 
@@ -244,6 +260,52 @@ const HeatmapDashboard: React.FC = () => {
     selectedUserId ? trails.filter(trail => trail.user.id === selectedUserId) : trails,
     [trails, selectedUserId]
   );
+
+  // Snap routes to roads
+  const handleSnapRoutes = async () => {
+    if (filteredTrails.length === 0) return;
+
+    setSnappingProgress({ current: 0, total: filteredTrails.length });
+    
+    for (let i = 0; i < filteredTrails.length; i++) {
+      const trail = filteredTrails[i];
+      
+      if (trail.path.length < 2) {
+        setSnappingProgress({ current: i + 1, total: filteredTrails.length });
+        continue;
+      }
+
+      try {
+        // Clean and prepare coordinates
+        const cleanedCoords = cleanCoordinates(trail.path);
+        
+        if (cleanedCoords.length < 2) {
+          console.warn(`Trail ${i} has insufficient valid coordinates`);
+          setSnappingProgress({ current: i + 1, total: filteredTrails.length });
+          continue;
+        }
+
+        // Snap to roads using OpenRouteService (FREE)
+        const snappedRoute = await snapTrailToRoads(cleanedCoords, 'driving');
+        
+        if (snappedRoute) {
+          trail.snappedRoute = snappedRoute;
+        }
+      } catch (error) {
+        console.error(`Error snapping trail ${i}:`, error);
+      }
+      
+      setSnappingProgress({ current: i + 1, total: filteredTrails.length });
+      
+      // Rate limiting: Wait 1.5s between requests (respects 40 req/min limit)
+      if (i < filteredTrails.length - 1) {
+        await new Promise(resolve => setTimeout(resolve, 1500));
+      }
+    }
+    
+    setSnappingProgress(null);
+    setSnapToRoads(true);
+  };
 
   // Get last synced timestamp for polling
   const getLastSyncedAt = () => {
@@ -438,6 +500,65 @@ const HeatmapDashboard: React.FC = () => {
               </div>
               <div className="text-xs text-gray-600 font-medium">Total Points</div>
             </div>
+          </div>
+
+          {/* Snap to Roads Button */}
+          <div className="bg-gradient-to-br from-blue-50 to-cyan-50 rounded-xl p-4 border border-blue-200">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center space-x-2">
+                <Navigation className="h-4 w-4 text-blue-600" />
+                <span className="text-sm font-semibold text-gray-700">Road Routing</span>
+              </div>
+              {snapToRoads && (
+                <span className="text-xs text-green-600 font-semibold">ACTIVE</span>
+              )}
+            </div>
+            
+            {snappingProgress ? (
+              <div className="space-y-2">
+                <div className="flex justify-between text-xs text-gray-600">
+                  <span>Processing trails...</span>
+                  <span>{snappingProgress.current}/{snappingProgress.total}</span>
+                </div>
+                <div className="w-full bg-gray-200 rounded-full h-2">
+                  <div 
+                    className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                    style={{ width: `${(snappingProgress.current / snappingProgress.total) * 100}%` }}
+                  ></div>
+                </div>
+                <p className="text-xs text-gray-500 italic">
+                  Snapping routes to roads (FREE via OpenRouteService)
+                </p>
+              </div>
+            ) : (
+              <>
+                <button
+                  onClick={handleSnapRoutes}
+                  disabled={filteredTrails.length === 0 || snappingProgress !== null}
+                  className="w-full bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 disabled:from-gray-400 disabled:to-gray-500 text-white font-semibold py-2.5 px-4 rounded-lg transition-all shadow-md hover:shadow-lg disabled:cursor-not-allowed flex items-center justify-center space-x-2"
+                >
+                  <Navigation className="h-4 w-4" />
+                  <span>Snap to Roads</span>
+                </button>
+                {snapToRoads && (
+                  <button
+                    onClick={() => {
+                      setSnapToRoads(false);
+                      filteredTrails.forEach(t => delete t.snappedRoute);
+                    }}
+                    className="w-full mt-2 bg-gray-200 hover:bg-gray-300 text-gray-700 font-medium py-2 px-4 rounded-lg transition-all text-sm"
+                  >
+                    Show GPS Path
+                  </button>
+                )}
+                <p className="text-xs text-gray-500 mt-2 text-center">
+                  {snapToRoads 
+                    ? '✓ Routes follow actual roads' 
+                    : 'Click to match routes to roads (FREE)'
+                  }
+                </p>
+              </>
+            )}
           </div>
 
           {/* Active Trails List */}
@@ -652,41 +773,124 @@ const HeatmapDashboard: React.FC = () => {
               const color = COLORS[userIdx % COLORS.length];
               return (
                 <React.Fragment key={trail.user.id}>
-                  {/* Draw trail as connected segments in chronological order */}
-                  {trail.path.map((pt, i) => {
-                    if (i < trail.path.length - 1) {
-                      const nextPt = trail.path[i + 1];
-                      return (
-                        <Polyline
-                          key={`${trail.user.id}-seg-${i}`}
-                          positions={[
-                            [pt.lat, pt.lng], // Leaflet uses [lat, lng]
-                            [nextPt.lat, nextPt.lng]
-                          ]}
-                          pathOptions={{
-                            color,
-                            weight: 3,
-                            opacity: 0.7
-                          }}
-                        />
-                      );
-                    }
-                    return null;
-                  })}
-
-                  {/* Markers for every point */}
-                  {trail.path.map((pt, i) => (
-                    <Marker key={`${trail.user.id}-pt-${i}`} position={[pt.lat, pt.lng]} icon={locationIcon}>
+                  {/* Draw trail - either snapped to roads or direct GPS path */}
+                  {snapToRoads && trail.snappedRoute ? (
+                    // Render snapped route (follows actual roads)
+                    <Polyline
+                      key={`${trail.user.id}-snapped`}
+                      positions={trail.snappedRoute.coordinates.map(coord => [coord[1], coord[0]])} // Convert [lng, lat] to [lat, lng]
+                      pathOptions={{
+                        color,
+                        weight: 4,
+                        opacity: 0.8,
+                        dashArray: '10, 5' // Dashed line to indicate snapped route
+                      }}
+                    >
                       <Popup>
-                        <div>
-                          <strong>{trail.user.name}</strong><br />
-                          Employee ID: {trail.user.employeeId}<br />
-                          Region: {trail.user.region}<br />
-                          Point #{i + 1}: [{pt.lat}, {pt.lng}]
+                        <div className="min-w-[200px]">
+                          <strong className="text-blue-600">{trail.user.name}</strong><br />
+                          <div className="mt-2 space-y-1 text-sm">
+                            <div className="flex justify-between">
+                              <span className="text-gray-600">Distance:</span>
+                              <span className="font-semibold">{formatDistance(trail.snappedRoute.distance)}</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-gray-600">Duration:</span>
+                              <span className="font-semibold">{formatDuration(trail.snappedRoute.duration)}</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-gray-600">GPS Points:</span>
+                              <span className="font-semibold">{trail.path.length}</span>
+                            </div>
+                            <div className="mt-2 text-xs text-green-600 flex items-center gap-1">
+                              <Navigation className="h-3 w-3" />
+                              <span>Road-snapped route</span>
+                            </div>
+                          </div>
                         </div>
                       </Popup>
-                    </Marker>
-                  ))}
+                    </Polyline>
+                  ) : (
+                    // Render direct GPS path (straight lines between points)
+                    trail.path.map((pt, i) => {
+                      if (i < trail.path.length - 1) {
+                        const nextPt = trail.path[i + 1];
+                        return (
+                          <Polyline
+                            key={`${trail.user.id}-seg-${i}`}
+                            positions={[
+                              [pt.lat, pt.lng], // Leaflet uses [lat, lng]
+                              [nextPt.lat, nextPt.lng]
+                            ]}
+                            pathOptions={{
+                              color,
+                              weight: 3,
+                              opacity: 0.7
+                            }}
+                          />
+                        );
+                      }
+                      return null;
+                    })
+                  )}
+
+                  {/* Markers for start and end points only when snapped */}
+                  {snapToRoads && trail.snappedRoute ? (
+                    <>
+                      {/* Start marker */}
+                      <Marker 
+                        key={`${trail.user.id}-start`} 
+                        position={[trail.path[0].lat, trail.path[0].lng]} 
+                        icon={L.divIcon({
+                          className: 'custom-marker',
+                          html: `<div style="background-color: ${color}; width: 12px; height: 12px; border-radius: 50%; border: 2px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.3);"></div>`,
+                          iconSize: [12, 12],
+                          iconAnchor: [6, 6]
+                        })}
+                      >
+                        <Popup>
+                          <div>
+                            <strong>{trail.user.name}</strong><br />
+                            <span className="text-green-600 font-semibold">START</span><br />
+                            [{trail.path[0].lat.toFixed(5)}, {trail.path[0].lng.toFixed(5)}]
+                          </div>
+                        </Popup>
+                      </Marker>
+                      {/* End marker */}
+                      <Marker 
+                        key={`${trail.user.id}-end`} 
+                        position={[trail.path[trail.path.length - 1].lat, trail.path[trail.path.length - 1].lng]} 
+                        icon={L.divIcon({
+                          className: 'custom-marker',
+                          html: `<div style="background-color: ${color}; width: 16px; height: 16px; border-radius: 50%; border: 3px solid white; box-shadow: 0 2px 6px rgba(0,0,0,0.4);"></div>`,
+                          iconSize: [16, 16],
+                          iconAnchor: [8, 8]
+                        })}
+                      >
+                        <Popup>
+                          <div>
+                            <strong>{trail.user.name}</strong><br />
+                            <span className="text-red-600 font-semibold">END</span><br />
+                            [{trail.path[trail.path.length - 1].lat.toFixed(5)}, {trail.path[trail.path.length - 1].lng.toFixed(5)}]
+                          </div>
+                        </Popup>
+                      </Marker>
+                    </>
+                  ) : (
+                    // Show all markers for GPS path
+                    trail.path.map((pt, i) => (
+                      <Marker key={`${trail.user.id}-pt-${i}`} position={[pt.lat, pt.lng]} icon={locationIcon}>
+                        <Popup>
+                          <div>
+                            <strong>{trail.user.name}</strong><br />
+                            Employee ID: {trail.user.employeeId}<br />
+                            Region: {trail.user.region}<br />
+                            Point #{i + 1}: [{pt.lat.toFixed(5)}, {pt.lng.toFixed(5)}]
+                          </div>
+                        </Popup>
+                      </Marker>
+                    ))
+                  )}
                 </React.Fragment>
               );
             })}

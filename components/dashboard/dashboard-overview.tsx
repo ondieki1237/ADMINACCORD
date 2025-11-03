@@ -11,7 +11,7 @@ import { authService } from "@/lib/auth";
 import { hasAdminAccess, canViewHeatmap } from "@/lib/permissions";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { BarChart3, Clock, MapPin, Shield, TrendingUp, Users, FileText, Download, Calendar } from "lucide-react";
+import { BarChart3, Clock, MapPin, Shield, TrendingUp, Users, FileText, Download, Calendar, CheckCircle } from "lucide-react";
 import { Bar, Line } from "react-chartjs-2";
 import {
   Chart as ChartJS,
@@ -531,363 +531,430 @@ export function DashboardOverview() {
 
   // Replace the previous return JSX with an improved modern layout + subtle animations
   return (
-    <div className="space-y-6 px-6 py-8">
-      {/* Top toolbar */}
-      <div className="flex items-center justify-between gap-4">
-        <div className="flex items-center gap-4">
-          <div className="p-3 rounded-xl bg-gradient-to-r from-[#008cf7] to-[#006bb8] shadow-lg">
-            <MapPin className="h-6 w-6 text-white" />
-          </div>
-          <div>
-            <h1 className="text-2xl font-extrabold text-gray-900">Dashboard</h1>
-            <p className="text-sm text-gray-500">Live overview of visits, trails and sales activity</p>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-3">
-          <div className="hidden sm:flex items-center gap-2">
-            <Button
-              variant="ghost"
-              className="flex items-center gap-2 px-3 py-2 rounded-md transition transform hover:scale-105 hover:bg-[#008cf7]/10 hover:text-[#008cf7] text-gray-700"
-              onClick={() => setShowReports(true)}
-            >
-              <BarChart3 className="h-4 w-4" />
-              Reports
-            </Button>
-
-            <Button
-              variant="ghost"
-              className="flex items-center gap-2 px-3 py-2 rounded-md transition transform hover:scale-105 bg-gradient-to-r from-[#008cf7]/10 to-[#006bb8]/10 hover:text-[#008cf7] text-gray-700"
-              onClick={() => setShowPerformance(true)}
-            >
-              <TrendingUp className="h-4 w-4" />
-              Performance
-            </Button>
-
-            <Button
-              variant="ghost"
-              className="flex items-center gap-2 px-3 py-2 rounded-md transition transform hover:scale-105 hover:bg-[#008cf7]/10 hover:text-[#008cf7] text-gray-700"
-              onClick={() => setShowVisits(true)}
-            >
-              <Clock className="h-4 w-4" />
-              Visits
-            </Button>
-
-            <Button
-              variant="ghost"
-              className="flex items-center gap-2 px-3 py-2 rounded-md transition transform hover:scale-105 hover:bg-[#008cf7]/10 hover:text-[#008cf7] text-gray-700"
-              onClick={() => setShowQuotations(true)}
-            >
-              <FileText className="h-4 w-4" />
-              Quotations
-            </Button>
-            <Button
-              variant="ghost"
-              className="flex items-center gap-2 px-3 py-2 rounded-md transition transform hover:scale-105 hover:bg-[#008cf7]/10 hover:text-[#008cf7] text-gray-700"
-              onClick={() => setShowEngineerReports(true)}
-            >
-              <FileText className="h-4 w-4" />
-              Engineer Reports
-            </Button>
-
-            <Button
-              variant="ghost"
-              className="flex items-center gap-2 px-3 py-2 rounded-md transition transform hover:scale-105 bg-black text-white hover:bg-gray-800 shadow-md"
-              onClick={() => window.location.href = "/dashboard/planners"}
-            >
-              <Calendar className="h-4 w-4" />
-              Planners
-            </Button>
-          </div>
-
-          <Button
-            variant="outline"
-            className="ml-2 hidden sm:inline-flex hover:bg-[#008cf7]/10 hover:border-[#008cf7] hover:text-[#008cf7] transition-colors text-gray-700"
-            onClick={() => window.location.reload()}
-            title="Refresh dashboard"
-          >
-            Refresh
-          </Button>
-
-          {/* Download Button with Dropdown */}
-          <div className="relative ml-2">
-            <Button
-              variant="default"
-              className="hidden sm:inline-flex items-center gap-2"
-              onClick={() => setShowDownloadMenu(!showDownloadMenu)}
-              title="Download dashboard data"
-            >
-              <Download className="h-4 w-4" />
-              Download
-            </Button>
-            
-            {showDownloadMenu && (
-              <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border z-50">
-                <div className="py-1">
-                  <button
-                    className="w-full text-left px-4 py-2 hover:bg-gray-100 flex items-center gap-2"
-                    onClick={() => {
-                      downloadDashboardData('csv');
-                      setShowDownloadMenu(false);
-                    }}
-                  >
-                    <FileText className="h-4 w-4" />
-                    Export as CSV
-                  </button>
-                  <button
-                    className="w-full text-left px-4 py-2 hover:bg-gray-100 flex items-center gap-2"
-                    onClick={() => {
-                      downloadDashboardData('json');
-                      setShowDownloadMenu(false);
-                    }}
-                  >
-                    <FileText className="h-4 w-4" />
-                    Export as JSON
-                  </button>
-                  <button
-                    className="w-full text-left px-4 py-2 hover:bg-gray-100 flex items-center gap-2"
-                    onClick={() => {
-                      downloadDashboardData('excel');
-                      setShowDownloadMenu(false);
-                    }}
-                  >
-                    <FileText className="h-4 w-4" />
-                    Analytics Excel Report
-                  </button>
-                </div>
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50/30">
+      <div className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+        {/* Header Section - Fixed Height */}
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-200/60 p-6">
+          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+            {/* Title Area */}
+            <div className="flex items-center gap-4">
+              <div className="flex-shrink-0 w-12 h-12 rounded-xl bg-gradient-to-br from-[#008cf7] to-[#0066cc] shadow-lg flex items-center justify-center">
+                <MapPin className="h-6 w-6 text-white" />
               </div>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* Welcome + Summary */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
-        <Card className="col-span-1 lg:col-span-2 p-6 rounded-2xl shadow-lg transform transition duration-400 hover:-translate-y-1">
-          <CardHeader>
-            <CardTitle className="text-lg font-bold">
-              Welcome back{currentUser ? `, ${currentUser.firstName}` : ""}!
-            </CardTitle>
-            <CardDescription className="text-sm text-gray-500">
-              {currentUser ? `${currentUser.role.toUpperCase()} • ${currentUser.region}` : "Loading user..."}
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <div className="bg-white/60 p-4 rounded-xl shadow-sm border border-gray-100 transition transform hover:scale-[1.02] hover:shadow-md">
-                <div className="text-xs font-semibold text-gray-500">Total Visits</div>
-                <div className="mt-2 text-2xl font-bold text-[#008cf7]">{totalVisits}</div>
-                <div className="text-xs text-green-600 mt-1">This period</div>
-              </div>
-              <div className="bg-white/60 p-4 rounded-xl shadow-sm border border-gray-100 transition transform hover:scale-[1.02] hover:shadow-md">
-                <div className="text-xs font-semibold text-gray-500">Total Trails</div>
-                <div className="mt-2 text-2xl font-bold text-[#008cf7]">{totalTrails}</div>
-                <div className="text-xs text-gray-500 mt-1">Distance: {totalTrailDistance.toFixed(2)} km</div>
-              </div>
-              <div className="bg-white/60 p-4 rounded-xl shadow-sm border border-gray-100 transition transform hover:scale-[1.02] hover:shadow-md">
-                <div className="text-xs font-semibold text-gray-500">Avg Visit Duration</div>
-                <div className="mt-2 text-2xl font-bold text-[#008cf7]">{averageDuration}m</div>
-                <div className="text-xs text-gray-500 mt-1">Per visit</div>
+              <div>
+                <h1 className="text-2xl font-bold text-gray-900">Dashboard Overview</h1>
+                <p className="text-sm text-gray-600">
+                  {currentUser ? `${currentUser.firstName} ${currentUser.lastName} • ${currentUser.role} • ${currentUser.region}` : "Loading..."}
+                </p>
               </div>
             </div>
-          </CardContent>
-        </Card>
 
-        <Card className="p-4 rounded-2xl shadow-lg h-full transform transition duration-400 hover:-translate-y-1">
-          <CardHeader>
-            <CardTitle className="text-sm font-semibold">Quick Actions</CardTitle>
-            <CardDescription className="text-xs text-gray-500">Admin tools & shortcuts</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="flex flex-col gap-3">
-              {canViewHeatmap(currentUser) && (
-                <Button
-                  variant="outline"
-                  className="w-full justify-start gap-2 transition transform hover:scale-105 hover:bg-[#008cf7]/10 hover:border-[#008cf7] hover:text-[#008cf7] text-gray-700"
-                  onClick={() => (window.location.href = "/dashboard/sales-heatmap")}
-                >
-                  <BarChart3 className="h-4 w-4" />
-                  View Heatmap
-                </Button>
-              )}
+            {/* Action Buttons - Desktop */}
+            <div className="hidden lg:flex items-center gap-2">
               <Button
-                variant="outline"
-                className="w-full justify-start gap-2 transition transform hover:scale-105 hover:bg-[#008cf7]/10 hover:border-[#008cf7] hover:text-[#008cf7] text-gray-700"
-                onClick={() => (window.location.href = "/dashboard/user-manager")}
+                variant="ghost"
+                size="sm"
+                className="text-gray-700 hover:text-[#008cf7] hover:bg-[#008cf7]/10"
+                onClick={() => setShowReports(true)}
               >
-                <Users className="h-4 w-4" />
-                Manage Users
+                <BarChart3 className="h-4 w-4 mr-2" />
+                Reports
               </Button>
+
               <Button
-                variant="outline"
-                className="w-full justify-start gap-2 transition transform hover:scale-105 hover:bg-[#008cf7]/10 hover:border-[#008cf7] hover:text-[#008cf7] text-gray-700"
-                onClick={() => (window.location.href = "/dashboard/advanced-analytics")}
+                variant="ghost"
+                size="sm"
+                className="text-gray-700 hover:text-[#008cf7] hover:bg-[#008cf7]/10"
+                onClick={() => setShowPerformance(true)}
               >
-                <TrendingUp className="h-4 w-4" />
-                Advanced Analytics
+                <TrendingUp className="h-4 w-4 mr-2" />
+                Performance
               </Button>
+
               <Button
-                variant="outline"
-                className="w-full justify-start gap-2 transition transform hover:scale-105 bg-black text-white hover:bg-gray-800 border-black shadow-md"
-                onClick={() => (window.location.href = "/dashboard/planners")}
+                variant="ghost"
+                size="sm"
+                className="text-gray-700 hover:text-[#008cf7] hover:bg-[#008cf7]/10"
+                onClick={() => setShowVisits(true)}
               >
-                <Calendar className="h-4 w-4" />
-                Weekly Planners
+                <Clock className="h-4 w-4 mr-2" />
+                Visits
               </Button>
-              
-              {/* Download Button for Mobile */}
+
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-gray-700 hover:text-[#008cf7] hover:bg-[#008cf7]/10"
+                onClick={() => setShowQuotations(true)}
+              >
+                <FileText className="h-4 w-4 mr-2" />
+                Quotations
+              </Button>
+
+              <div className="h-6 w-px bg-gray-300 mx-2" />
+
+              {/* Download Dropdown */}
               <div className="relative">
                 <Button
                   variant="outline"
-                  className="w-full justify-start gap-2 transition transform hover:scale-105 bg-[#008cf7]/10 hover:bg-[#008cf7]/20 border-[#008cf7]/30 text-[#008cf7] hover:text-[#006bb8]"
+                  size="sm"
+                  className="border-[#008cf7] text-[#008cf7] hover:bg-[#008cf7] hover:text-white"
                   onClick={() => setShowDownloadMenu(!showDownloadMenu)}
                 >
-                  <Download className="h-4 w-4" />
-                  Download Data
+                  <Download className="h-4 w-4 mr-2" />
+                  Export
                 </Button>
+                
+                {showDownloadMenu && (
+                  <>
+                    <div 
+                      className="fixed inset-0 z-40" 
+                      onClick={() => setShowDownloadMenu(false)}
+                    />
+                    <div className="absolute right-0 mt-2 w-56 bg-white rounded-lg shadow-xl border border-gray-200 z-50">
+                      <div className="py-2">
+                        <button
+                          className="w-full text-left px-4 py-2.5 hover:bg-gray-50 flex items-center gap-3 text-sm text-gray-700 transition-colors"
+                          onClick={() => {
+                            downloadDashboardData('csv');
+                            setShowDownloadMenu(false);
+                          }}
+                        >
+                          <FileText className="h-4 w-4 text-gray-500" />
+                          Export as CSV
+                        </button>
+                        <button
+                          className="w-full text-left px-4 py-2.5 hover:bg-gray-50 flex items-center gap-3 text-sm text-gray-700 transition-colors"
+                          onClick={() => {
+                            downloadDashboardData('json');
+                            setShowDownloadMenu(false);
+                          }}
+                        >
+                          <FileText className="h-4 w-4 text-gray-500" />
+                          Export as JSON
+                        </button>
+                        <button
+                          className="w-full text-left px-4 py-2.5 hover:bg-gray-50 flex items-center gap-3 text-sm text-gray-700 transition-colors"
+                          onClick={() => {
+                            downloadDashboardData('excel');
+                            setShowDownloadMenu(false);
+                          }}
+                        >
+                          <FileText className="h-4 w-4 text-gray-500" />
+                          Analytics Excel Report
+                        </button>
+                      </div>
+                    </div>
+                  </>
+                )}
               </div>
             </div>
-          </CardContent>
-        </Card>
-      </div>
+          </div>
 
-      {/* Charts area */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <Card className="col-span-2 p-4 rounded-2xl shadow-md transition transform hover:scale-[1.01] border-2 border-gray-100">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <TrendingUp className="h-5 w-5 text-[#008cf7]" />
-              Performance Trends
-            </CardTitle>
-            <CardDescription>Visits vs Trails over time</CardDescription>
-          </CardHeader>
-          <CardContent className="h-72">
-            <div className="h-full w-full transition-opacity duration-500">
-              <Line
-                data={performanceChartData}
-                options={{
-                  responsive: true,
-                  maintainAspectRatio: false,
-                  plugins: {
-                    legend: { display: true, position: "top" },
-                    tooltip: { mode: "index", intersect: false },
-                  },
-                  interaction: { mode: "nearest", axis: "x", intersect: false },
-                  scales: {
-                    x: { title: { display: true, text: "Date" } },
-                    y: { title: { display: true, text: "Count" }, beginAtZero: true },
-                  },
-                }}
-              />
-            </div>
-          </CardContent>
-        </Card>
+          {/* Mobile Actions */}
+          <div className="lg:hidden mt-4 flex flex-wrap gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              className="flex-1 min-w-[140px]"
+              onClick={() => setShowReports(true)}
+            >
+              <BarChart3 className="h-4 w-4 mr-2" />
+              Reports
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="flex-1 min-w-[140px]"
+              onClick={() => setShowVisits(true)}
+            >
+              <Clock className="h-4 w-4 mr-2" />
+              Visits
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="flex-1 min-w-[140px] border-[#008cf7] text-[#008cf7]"
+              onClick={() => setShowDownloadMenu(!showDownloadMenu)}
+            >
+              <Download className="h-4 w-4 mr-2" />
+              Export
+            </Button>
+          </div>
+        </div>
 
-        <Card className="p-4 rounded-2xl shadow-md transition transform hover:scale-[1.01] border-2 border-gray-100">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <BarChart3 className="h-5 w-5 text-[#008cf7]" />
-              Sales Rep Activity
-            </CardTitle>
-            <CardDescription>Top performers</CardDescription>
-          </CardHeader>
-          <CardContent className="h-72">
-            <Bar
-              data={salesHeatmapChartData}
-              options={{
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                  legend: { display: false },
-                },
-                scales: {
-                  x: { title: { display: true, text: "Sales Reps (Location)" } },
-                  y: { title: { display: true, text: "Count" }, beginAtZero: true },
-                },
-              }}
-            />
-          </CardContent>
-        </Card>
-      </div>
+        {/* Stats Cards Row - Consistent Heights */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <Card className="bg-white hover:shadow-lg transition-all duration-200 border border-gray-200/60">
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between mb-4">
+                <div className="w-10 h-10 rounded-lg bg-blue-100 flex items-center justify-center">
+                  <MapPin className="h-5 w-5 text-[#008cf7]" />
+                </div>
+                <span className="text-xs font-medium text-green-600 bg-green-50 px-2 py-1 rounded-full">
+                  Active
+                </span>
+              </div>
+              <div>
+                <p className="text-sm font-medium text-gray-600 mb-1">Total Visits</p>
+                <p className="text-3xl font-bold text-gray-900">{totalVisits}</p>
+                <p className="text-xs text-gray-500 mt-1">This period</p>
+              </div>
+            </CardContent>
+          </Card>
 
-      {/* Admin cards + Recent activity */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 space-y-6">
-          {hasAdminAccess(currentUser) && (
-            <Card className="p-4 rounded-2xl shadow-md transition transform hover:-translate-y-1 border-2 border-gray-100">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Shield className="h-4 w-4 text-[#008cf7]" />
-                  Admin Features
-                </CardTitle>
-                <CardDescription>Super user tools and analytics</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                  <Button variant="ghost" className="flex-col items-start gap-2 p-3 rounded-lg transition hover:bg-[#008cf7]/10 hover:text-[#008cf7] text-gray-700">
-                    <Users className="h-5 w-5 text-[#008cf7]" />
-                    <div className="text-xs">Manage Users</div>
-                  </Button>
-                  <Button variant="ghost" className="flex-col items-start gap-2 p-3 rounded-lg transition hover:bg-[#008cf7]/10 hover:text-[#008cf7] text-gray-700">
+          <Card className="bg-white hover:shadow-lg transition-all duration-200 border border-gray-200/60">
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between mb-4">
+                <div className="w-10 h-10 rounded-lg bg-purple-100 flex items-center justify-center">
+                  <TrendingUp className="h-5 w-5 text-purple-600" />
+                </div>
+                <span className="text-xs font-medium text-blue-600 bg-blue-50 px-2 py-1 rounded-full">
+                  Tracking
+                </span>
+              </div>
+              <div>
+                <p className="text-sm font-medium text-gray-600 mb-1">Total Trails</p>
+                <p className="text-3xl font-bold text-gray-900">{totalTrails}</p>
+                <p className="text-xs text-gray-500 mt-1">{totalTrailDistance.toFixed(2)} km covered</p>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="bg-white hover:shadow-lg transition-all duration-200 border border-gray-200/60">
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between mb-4">
+                <div className="w-10 h-10 rounded-lg bg-orange-100 flex items-center justify-center">
+                  <Clock className="h-5 w-5 text-orange-600" />
+                </div>
+                <span className="text-xs font-medium text-gray-600 bg-gray-100 px-2 py-1 rounded-full">
+                  Avg
+                </span>
+              </div>
+              <div>
+                <p className="text-sm font-medium text-gray-600 mb-1">Visit Duration</p>
+                <p className="text-3xl font-bold text-gray-900">{averageDuration}<span className="text-lg text-gray-500">m</span></p>
+                <p className="text-xs text-gray-500 mt-1">Per visit</p>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="bg-white hover:shadow-lg transition-all duration-200 border border-gray-200/60">
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between mb-4">
+                <div className="w-10 h-10 rounded-lg bg-green-100 flex items-center justify-center">
+                  <CheckCircle className="h-5 w-5 text-green-600" />
+                </div>
+                <span className="text-xs font-medium text-green-600 bg-green-50 px-2 py-1 rounded-full">
+                  {Math.round(data?.performance.completionRate || 0)}%
+                </span>
+              </div>
+              <div>
+                <p className="text-sm font-medium text-gray-600 mb-1">Completion Rate</p>
+                <p className="text-3xl font-bold text-gray-900">{data?.performance.visitsThisMonth ?? 0}</p>
+                <p className="text-xs text-gray-500 mt-1">Visits this month</p>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Charts Row - Equal Heights */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <Card className="lg:col-span-2 bg-white border border-gray-200/60">
+            <CardHeader className="border-b border-gray-100 pb-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="text-lg font-semibold text-gray-900 flex items-center gap-2">
                     <TrendingUp className="h-5 w-5 text-[#008cf7]" />
-                    <div className="text-xs">Analytics</div>
+                    Performance Trends
+                  </CardTitle>
+                  <CardDescription className="text-sm text-gray-600 mt-1">
+                    Visits vs Trails over time
+                  </CardDescription>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="pt-6 pb-4">
+              <div className="h-80">
+                <Line
+                  data={performanceChartData}
+                  options={{
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                      legend: { 
+                        display: true, 
+                        position: "top",
+                        labels: {
+                          usePointStyle: true,
+                          padding: 15,
+                          font: { size: 12 }
+                        }
+                      },
+                      tooltip: { 
+                        mode: "index", 
+                        intersect: false,
+                        backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                        padding: 12,
+                        cornerRadius: 8
+                      },
+                    },
+                    interaction: { mode: "nearest", axis: "x", intersect: false },
+                    scales: {
+                      x: { 
+                        grid: { display: false },
+                        ticks: { font: { size: 11 } }
+                      },
+                      y: { 
+                        beginAtZero: true,
+                        ticks: { font: { size: 11 } },
+                        grid: { color: 'rgba(0, 0, 0, 0.05)' }
+                      },
+                    },
+                  }}
+                />
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="bg-white border border-gray-200/60">
+            <CardHeader className="border-b border-gray-100 pb-4">
+              <CardTitle className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+                <BarChart3 className="h-5 w-5 text-[#008cf7]" />
+                Top Performers
+              </CardTitle>
+              <CardDescription className="text-sm text-gray-600 mt-1">
+                Sales rep activity
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="pt-6 pb-4">
+              <div className="h-80">
+                <Bar
+                  data={salesHeatmapChartData}
+                  options={{
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                      legend: { display: false },
+                      tooltip: {
+                        backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                        padding: 12,
+                        cornerRadius: 8
+                      }
+                    },
+                    scales: {
+                      x: { 
+                        grid: { display: false },
+                        ticks: { 
+                          font: { size: 10 },
+                          maxRotation: 45,
+                          minRotation: 45
+                        }
+                      },
+                      y: { 
+                        beginAtZero: true,
+                        ticks: { font: { size: 11 } },
+                        grid: { color: 'rgba(0, 0, 0, 0.05)' }
+                      },
+                    },
+                  }}
+                />
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Bottom Grid - Recent Activity & Quick Actions */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="lg:col-span-2">
+            <RecentActivity activities={transformedActivity} />
+          </div>
+
+          <div className="space-y-4">
+            <Card className="bg-white border border-gray-200/60">
+              <CardHeader className="border-b border-gray-100 pb-4">
+                <CardTitle className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+                  <Shield className="h-5 w-5 text-[#008cf7]" />
+                  Quick Actions
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="pt-4">
+                <div className="space-y-2">
+                  {canViewHeatmap(currentUser) && (
+                    <Button
+                      variant="ghost"
+                      className="w-full justify-start text-gray-700 hover:bg-[#008cf7]/10 hover:text-[#008cf7]"
+                      onClick={() => (window.location.href = "/dashboard/sales-heatmap")}
+                    >
+                      <MapPin className="h-4 w-4 mr-3" />
+                      Sales Heatmap
+                    </Button>
+                  )}
+                  <Button
+                    variant="ghost"
+                    className="w-full justify-start text-gray-700 hover:bg-[#008cf7]/10 hover:text-[#008cf7]"
+                    onClick={() => (window.location.href = "/dashboard/user-manager")}
+                  >
+                    <Users className="h-4 w-4 mr-3" />
+                    User Management
                   </Button>
-                  <Button variant="ghost" className="flex-col items-start gap-2 p-3 rounded-lg transition hover:bg-[#008cf7]/10 hover:text-[#008cf7] text-gray-700">
-                    <FileText className="h-5 w-5 text-[#008cf7]" />
-                    <div className="text-xs">Reports</div>
+                  <Button
+                    variant="ghost"
+                    className="w-full justify-start text-gray-700 hover:bg-[#008cf7]/10 hover:text-[#008cf7]"
+                    onClick={() => (window.location.href = "/dashboard/advanced-analytics")}
+                  >
+                    <TrendingUp className="h-4 w-4 mr-3" />
+                    Advanced Analytics
                   </Button>
-                  <Button variant="ghost" className="flex-col items-start gap-2 p-3 rounded-lg transition hover:bg-[#008cf7]/10 hover:text-[#008cf7] text-gray-700">
-                    <MapPin className="h-5 w-5 text-[#008cf7]" />
-                    <div className="text-xs">Heatmap</div>
+                  <Button
+                    variant="ghost"
+                    className="w-full justify-start text-gray-700 hover:bg-[#008cf7]/10 hover:text-[#008cf7]"
+                    onClick={() => setShowEngineerReports(true)}
+                  >
+                    <FileText className="h-4 w-4 mr-3" />
+                    Engineer Reports
+                  </Button>
+                  <Button
+                    variant="outline"
+                    className="w-full justify-start bg-black text-white hover:bg-gray-800 border-black"
+                    onClick={() => (window.location.href = "/dashboard/planners")}
+                  >
+                    <Calendar className="h-4 w-4 mr-3" />
+                    Weekly Planners
                   </Button>
                 </div>
               </CardContent>
             </Card>
-          )}
 
-          <RecentActivity activities={transformedActivity} />
-        </div>
-
-        <div className="space-y-6">
-          <Card className="p-4 rounded-2xl shadow-md transition transform hover:scale-[1.01] border-2 border-gray-100">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <FileText className="h-4 w-4 text-[#008cf7]" />
-                Summary
-              </CardTitle>
-              <CardDescription>Key metrics at a glance</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="text-sm text-gray-500">Completion</div>
-                <div className="text-sm font-semibold text-[#008cf7]">{Math.round(data?.performance.completionRate || 0)}%</div>
-
-                <div className="text-sm text-gray-500">Avg Visit</div>
-                <div className="text-sm font-semibold text-[#008cf7]">{Math.round(data?.performance.averageVisitDuration || 0)}m</div>
-
-                <div className="text-sm text-gray-500">Trails This Month</div>
-                <div className="text-sm font-semibold text-[#008cf7]">{data?.performance.trailsThisMonth ?? 0}</div>
-
-                <div className="text-sm text-gray-500">Visits This Month</div>
-                <div className="text-sm font-semibold text-[#008cf7]">{data?.performance.visitsThisMonth ?? 0}</div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="p-4 rounded-2xl shadow-md border-2 border-gray-100">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <MapPin className="h-4 w-4 text-[#008cf7]" />
-                Heatmap Insight
-              </CardTitle>
-              <CardDescription>Activity intensity</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="h-40 flex items-center justify-center text-sm text-gray-500">
-                {data?.heatmap ? "Heatmap data ready" : "No heatmap data"}
-              </div>
-            </CardContent>
-          </Card>
+            <Card className="bg-white border border-gray-200/60">
+              <CardHeader className="border-b border-gray-100 pb-4">
+                <CardTitle className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+                  <FileText className="h-5 w-5 text-[#008cf7]" />
+                  Monthly Summary
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="pt-4">
+                <div className="space-y-3">
+                  <div className="flex justify-between items-center py-2 border-b border-gray-100">
+                    <span className="text-sm text-gray-600">Trails This Month</span>
+                    <span className="text-sm font-semibold text-gray-900">{data?.performance.trailsThisMonth ?? 0}</span>
+                  </div>
+                  <div className="flex justify-between items-center py-2 border-b border-gray-100">
+                    <span className="text-sm text-gray-600">Visits This Month</span>
+                    <span className="text-sm font-semibold text-gray-900">{data?.performance.visitsThisMonth ?? 0}</span>
+                  </div>
+                  <div className="flex justify-between items-center py-2 border-b border-gray-100">
+                    <span className="text-sm text-gray-600">Avg Visit Duration</span>
+                    <span className="text-sm font-semibold text-gray-900">{Math.round(data?.performance.averageVisitDuration || 0)}m</span>
+                  </div>
+                  <div className="flex justify-between items-center py-2">
+                    <span className="text-sm text-gray-600">Completion Rate</span>
+                    <span className="text-sm font-semibold text-green-600">{Math.round(data?.performance.completionRate || 0)}%</span>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
         </div>
       </div>
     </div>

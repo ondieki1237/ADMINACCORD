@@ -11,9 +11,15 @@ import {
   Clock, 
   RefreshCw,
   Filter,
-  Search
+  Search,
+  Calendar
 } from "lucide-react";
-import { generateReportsSummaryPDF, generateIndividualReportPDF } from "@/lib/reportsPdfGenerator";
+import { 
+  generateReportsSummaryPDF, 
+  generateIndividualReportPDF,
+  generateDetailedReportPDF,
+  type DetailedReportResponse
+} from "@/lib/reportsPdfGenerator";
 import type { Report as ReportPdfType } from "@/lib/reportsPdfGenerator";
 
 interface Report {
@@ -31,9 +37,51 @@ interface Report {
   filePublicId?: string;
   weekStart: string;
   weekEnd: string;
+  weekRange?: string; // e.g., "06/10/2025 - 12/10/2025"
   status: "pending" | "approved" | "rejected";
   adminNotes?: string | null;
   createdAt: string;
+  // Report content - NEW STRUCTURE (nested)
+  content?: {
+    metadata?: {
+      author?: string;
+      submittedAt?: string;
+      weekRange?: string;
+    };
+    sections?: Array<{
+      id: string;
+      title: string;
+      content: string;
+    }>;
+  };
+  // LEGACY: sections at root level (backward compatibility)
+  sections?: Array<{
+    id: string;
+    title: string;
+    content: string;
+  }>;
+  // Legacy metadata (backward compatibility)
+  weeklySummary?: string;
+  visits?: Array<{
+    hospital?: string;
+    clientName?: string;
+    purpose?: string;
+    outcome?: string;
+    notes?: string;
+  }>;
+  quotations?: Array<{
+    clientName?: string;
+    equipment?: string;
+    amount?: number;
+    status?: string;
+  }>;
+  newLeads?: Array<{
+    name?: string;
+    interest?: string;
+    notes?: string;
+  }>;
+  challenges?: string;
+  nextWeekPlan?: string;
 }
 
 export default function Reports() {
@@ -75,6 +123,17 @@ export default function Reports() {
 
       const data = await res.json();
       if (data.success && Array.isArray(data.data)) {
+        // Debug: Log first report to see structure
+        if (data.data.length > 0) {
+          console.log('📊 Sample Report Structure:', {
+            hasFileUrl: !!data.data[0].fileUrl,
+            hasFilePath: !!data.data[0].filePath,
+            hasSections: !!data.data[0].sections,
+            hasWeekRange: !!data.data[0].weekRange,
+            sectionsCount: data.data[0].sections?.length || 0,
+            firstReport: data.data[0]
+          });
+        }
         setReports(data.data);
       } else {
         setError("Unexpected response shape from /api/reports.");
@@ -199,13 +258,64 @@ export default function Reports() {
   };
 
   const handleGenerateIndividualPDF = async (report: Report) => {
+    const token = localStorage.getItem("accessToken");
+    if (!token) {
+      alert("No auth token");
+      return;
+    }
+
     try {
       setGeneratingPdf(true);
-      const adminName = 'Admin'; // Get from auth context
-      await generateIndividualReportPDF(report as ReportPdfType, adminName);
-    } catch (err) {
-      console.error('PDF generation error:', err);
-      alert('Failed to generate individual PDF');
+      
+      // Try to fetch detailed report data with visits and quotations
+      console.log('🔍 Fetching detailed report:', report._id);
+      const res = await fetch(
+        `https://app.codewithseth.co.ke/api/admin/reports/${report._id}`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+        }
+      );
+
+      console.log('📡 API Response Status:', res.status);
+
+      // If detailed endpoint returns 404, fall back to basic PDF generation
+      if (res.status === 404) {
+        console.log('⚠️ Detailed endpoint not available, using basic PDF generator');
+        const adminName = 'Admin';
+        await generateIndividualReportPDF(report as ReportPdfType, adminName);
+        return;
+      }
+
+      if (!res.ok) {
+        const errorText = await res.text();
+        console.error('❌ API Error Response:', errorText);
+        throw new Error(`Failed to fetch detailed report: ${res.status} - ${errorText}`);
+      }
+
+      const detailedData: DetailedReportResponse = await res.json();
+      
+      if (!detailedData.success || !detailedData.data) {
+        console.error('❌ Invalid response structure:', detailedData);
+        throw new Error('Invalid response from server');
+      }
+
+      console.log('✅ Detailed Report Data:', detailedData.data);
+      console.log('📊 Statistics:', {
+        visits: detailedData.data.visits?.length || 0,
+        quotations: detailedData.data.quotations?.length || 0,
+        totalPotentialValue: detailedData.data.statistics?.visits?.totalPotentialValue || 0
+      });
+      
+      // Use new detailed PDF generator
+      const adminName = 'Admin'; // Get from auth context if available
+      await generateDetailedReportPDF(detailedData.data, adminName);
+      
+    } catch (err: any) {
+      console.error('❌ PDF generation error:', err);
+      alert(`Failed to generate PDF: ${err.message || 'Unknown error'}`);
     } finally {
       setGeneratingPdf(false);
     }
@@ -405,8 +515,7 @@ export default function Reports() {
                         </div>
                       </td>
                       <td className="px-6 py-4 text-sm text-gray-700">
-                        {new Date(report.weekStart).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} -{" "}
-                        {new Date(report.weekEnd).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                        {report.weekRange || `${new Date(report.weekStart).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - ${new Date(report.weekEnd).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`}
                       </td>
                       <td className="px-6 py-4 text-sm text-gray-700">
                         {new Date(report.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
@@ -437,16 +546,17 @@ export default function Reports() {
                           >
                             <Download className="h-4 w-4" />
                           </Button>
-                          {viewUrl && (
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => window.open(viewUrl, "_blank")}
-                              title="View Original File"
-                            >
-                              <Eye className="h-4 w-4" />
-                            </Button>
-                          )}
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => {
+                              const detailModal = document.getElementById(`detail-${report._id}`);
+                              if (detailModal) detailModal.classList.remove('hidden');
+                            }}
+                            title="View Report Details"
+                          >
+                            <Eye className="h-4 w-4" />
+                          </Button>
                           {report.status === 'pending' && (
                             <Button
                               size="sm"
@@ -460,6 +570,291 @@ export default function Reports() {
                               Review
                             </Button>
                           )}
+                        </div>
+
+                        {/* Detail View Modal */}
+                        <div id={`detail-${report._id}`} className="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 overflow-y-auto">
+                          <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full my-8">
+                            {/* Modal Header */}
+                            <div className="bg-gradient-to-r from-[#008cf7] to-[#006bb8] text-white p-6 rounded-t-2xl">
+                              <div className="flex justify-between items-start">
+                                <div>
+                                  <h3 className="text-2xl font-bold mb-2">
+                                    📄 Weekly Report - {report.userId.firstName} {report.userId.lastName}
+                                  </h3>
+                                  <p className="text-sm opacity-90">{report.userId.email}</p>
+                                </div>
+                                <button
+                                  onClick={() => {
+                                    const detailModal = document.getElementById(`detail-${report._id}`);
+                                    if (detailModal) detailModal.classList.add('hidden');
+                                  }}
+                                  className="text-white hover:bg-white/20 rounded-full p-2 transition-colors"
+                                >
+                                  <X className="h-6 w-6" />
+                                </button>
+                              </div>
+                              <div className="flex items-center space-x-4 mt-4 text-sm">
+                                <span className="flex items-center">
+                                  <Calendar className="h-4 w-4 mr-1" />
+                                  {report.weekRange || `${new Date(report.weekStart).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - ${new Date(report.weekEnd).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`}
+                                </span>
+                                <span className="flex items-center">
+                                  <Clock className="h-4 w-4 mr-1" />
+                                  Submitted: {new Date(report.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                                </span>
+                                <span className={`px-3 py-1 rounded-full text-xs font-bold ${statusBadge}`}>
+                                  {report.status.toUpperCase()}
+                                </span>
+                              </div>
+                            </div>
+
+                            {/* Modal Content */}
+                            <div className="p-6 max-h-[70vh] overflow-y-auto">
+                              {/* NEW: Sections-based content display */}
+                              {/* Check for sections in nested content.sections OR root-level sections */}
+                              {(() => {
+                                const reportSections = report.content?.sections || report.sections;
+                                return reportSections && reportSections.length > 0 ? (
+                                reportSections.map((section, idx) => {
+                                  // Skip empty sections
+                                  if (!section.content || section.content.trim() === '') return null;
+
+                                  // Determine section styling
+                                  let bgColor = 'bg-gray-50';
+                                  let borderColor = 'border-gray-200';
+                                  let icon = '📄';
+
+                                  switch (section.id) {
+                                    case 'summary':
+                                      bgColor = 'bg-gray-50';
+                                      borderColor = 'border-gray-200';
+                                      icon = '📋';
+                                      break;
+                                    case 'visits':
+                                      bgColor = 'bg-blue-50';
+                                      borderColor = 'border-blue-200';
+                                      icon = '👥';
+                                      break;
+                                    case 'quotations':
+                                      bgColor = 'bg-green-50';
+                                      borderColor = 'border-green-200';
+                                      icon = '💰';
+                                      break;
+                                    case 'leads':
+                                      bgColor = 'bg-yellow-50';
+                                      borderColor = 'border-yellow-200';
+                                      icon = '🎯';
+                                      break;
+                                    case 'challenges':
+                                      bgColor = 'bg-red-50';
+                                      borderColor = 'border-red-200';
+                                      icon = '⚠️';
+                                      break;
+                                    case 'nextWeek':
+                                    case 'next-week':
+                                      bgColor = 'bg-purple-50';
+                                      borderColor = 'border-purple-200';
+                                      icon = '⚡';
+                                      break;
+                                  }
+
+                                  return (
+                                    <div key={idx} className="mb-6">
+                                      <h4 className="text-lg font-bold text-gray-900 mb-3 flex items-center">
+                                        {icon} {section.title}
+                                      </h4>
+                                      <div className={`${bgColor} rounded-lg p-4 border-2 ${borderColor}`}>
+                                        <p className="text-sm text-gray-700 whitespace-pre-wrap">{section.content}</p>
+                                      </div>
+                                    </div>
+                                  );
+                                })
+                              ) : (
+                                <>
+                                  {/* BASIC TEXT CONTENT (if sections not available but report text exists) */}
+                                  {report.report && report.report.trim() ? (
+                                    <div className="mb-6">
+                                      <h4 className="text-lg font-bold text-gray-900 mb-3 flex items-center">
+                                        📋 Report Content
+                                      </h4>
+                                      <div className="bg-gray-50 rounded-lg p-4 border-2 border-gray-200">
+                                        <p className="text-sm text-gray-700 whitespace-pre-wrap">{report.report}</p>
+                                      </div>
+                                    </div>
+                                  ) : (
+                                    <>
+                                      {/* LEGACY: Old metadata structure (fallback) */}
+                                      {/* Weekly Summary */}
+                                      {report.weeklySummary && (
+                                <div className="mb-6">
+                                  <h4 className="text-lg font-bold text-gray-900 mb-3 flex items-center">
+                                    📋 Weekly Summary
+                                  </h4>
+                                  <div className="bg-gray-50 rounded-lg p-4 border-2 border-gray-200">
+                                    <p className="text-sm text-gray-700 whitespace-pre-wrap">{report.weeklySummary}</p>
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* Visits */}
+                              {report.visits && report.visits.length > 0 && (
+                                <div className="mb-6">
+                                  <h4 className="text-lg font-bold text-gray-900 mb-3 flex items-center">
+                                    👥 Customer Visits ({report.visits.length} visits)
+                                  </h4>
+                                  <div className="space-y-3">
+                                    {report.visits.map((visit, idx) => (
+                                      <div key={idx} className="bg-blue-50 rounded-lg p-4 border-2 border-blue-200">
+                                        <div className="flex items-start">
+                                          <span className="bg-[#008cf7] text-white rounded-full h-6 w-6 flex items-center justify-center text-xs font-bold mr-3 mt-1">
+                                            {idx + 1}
+                                          </span>
+                                          <div className="flex-1">
+                                            <p className="font-semibold text-gray-900">
+                                              {visit.hospital || visit.clientName || 'N/A'}
+                                            </p>
+                                            {visit.purpose && (
+                                              <p className="text-sm text-gray-600 mt-1">
+                                                <span className="font-medium">Purpose:</span> {visit.purpose}
+                                              </p>
+                                            )}
+                                            {visit.outcome && (
+                                              <p className="text-sm text-gray-600 mt-1">
+                                                <span className="font-medium">Outcome:</span> {visit.outcome}
+                                              </p>
+                                            )}
+                                            {visit.notes && (
+                                              <p className="text-sm text-gray-500 mt-1 italic">{visit.notes}</p>
+                                            )}
+                                          </div>
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* Quotations */}
+                              {report.quotations && report.quotations.length > 0 && (
+                                <div className="mb-6">
+                                  <h4 className="text-lg font-bold text-gray-900 mb-3 flex items-center">
+                                    💰 Quotations Generated ({report.quotations.length} quotations)
+                                  </h4>
+                                  <div className="space-y-3">
+                                    {report.quotations.map((quote, idx) => (
+                                      <div key={idx} className="bg-green-50 rounded-lg p-4 border-2 border-green-200">
+                                        <p className="font-semibold text-gray-900">• {quote.equipment || 'Equipment'}</p>
+                                        <p className="text-sm text-gray-600 mt-1">Client: {quote.clientName || 'N/A'}</p>
+                                        {quote.amount && (
+                                          <p className="text-sm text-green-700 font-bold mt-1">KES {quote.amount.toLocaleString()}</p>
+                                        )}
+                                        {quote.status && (
+                                          <span className="inline-block mt-2 px-2 py-1 bg-green-200 text-green-800 text-xs rounded-full">
+                                            {quote.status}
+                                          </span>
+                                        )}
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* New Leads */}
+                              {report.newLeads && report.newLeads.length > 0 && (
+                                <div className="mb-6">
+                                  <h4 className="text-lg font-bold text-gray-900 mb-3 flex items-center">
+                                    🎯 New Leads ({report.newLeads.length} leads)
+                                  </h4>
+                                  <div className="space-y-2">
+                                    {report.newLeads.map((lead, idx) => (
+                                      <div key={idx} className="bg-yellow-50 rounded-lg p-3 border-2 border-yellow-200">
+                                        <p className="font-semibold text-gray-900">• {lead.name || 'N/A'}</p>
+                                        {lead.interest && (
+                                          <p className="text-sm text-gray-600 mt-1">{lead.interest}</p>
+                                        )}
+                                        {lead.notes && (
+                                          <p className="text-xs text-gray-500 mt-1 italic">{lead.notes}</p>
+                                        )}
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* Challenges */}
+                              {report.challenges && (
+                                <div className="mb-6">
+                                  <h4 className="text-lg font-bold text-gray-900 mb-3 flex items-center">
+                                    ⚠️ Challenges Faced
+                                  </h4>
+                                  <div className="bg-red-50 rounded-lg p-4 border-2 border-red-200">
+                                    <p className="text-sm text-gray-700 whitespace-pre-wrap">{report.challenges}</p>
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* Next Week Plan */}
+                              {report.nextWeekPlan && (
+                                <div className="mb-6">
+                                  <h4 className="text-lg font-bold text-gray-900 mb-3 flex items-center">
+                                    ⚡ Next Week's Plan
+                                  </h4>
+                                  <div className="bg-purple-50 rounded-lg p-4 border-2 border-purple-200">
+                                    <p className="text-sm text-gray-700 whitespace-pre-wrap">{report.nextWeekPlan}</p>
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* Admin Notes */}
+                              {report.adminNotes && (
+                                <div className="mb-6">
+                                  <h4 className="text-lg font-bold text-gray-900 mb-3 flex items-center">
+                                    📝 Admin Notes
+                                  </h4>
+                                  <div className="bg-gray-100 rounded-lg p-4 border-2 border-gray-300">
+                                    <p className="text-sm text-gray-700 whitespace-pre-wrap">{report.adminNotes}</p>
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* No Content Message */}
+                              {!report.report && !report.content?.sections?.length && !report.sections?.length && !report.weeklySummary && !report.visits?.length && !report.quotations?.length && 
+                               !report.newLeads?.length && !report.challenges && !report.nextWeekPlan && (
+                                <div className="text-center py-12">
+                                  <FileText className="h-16 w-16 text-gray-300 mx-auto mb-4" />
+                                  <p className="text-gray-500">No detailed report content available.</p>
+                                  <p className="text-sm text-gray-400 mt-2">The report may only contain an attached file.</p>
+                                </div>
+                              )}
+                                    </>
+                                  )}
+                                </>
+                              );
+                              })()}
+                            </div>
+
+                            {/* Modal Footer */}
+                            <div className="bg-gray-50 p-4 rounded-b-2xl flex justify-end space-x-3">
+                              <Button
+                                onClick={() => handleGenerateIndividualPDF(report)}
+                                disabled={generatingPdf}
+                                className="bg-black text-white hover:bg-gray-800"
+                              >
+                                <Download className="h-4 w-4 mr-2" />
+                                Download PDF
+                              </Button>
+                              <Button
+                                variant="outline"
+                                onClick={() => {
+                                  const detailModal = document.getElementById(`detail-${report._id}`);
+                                  if (detailModal) detailModal.classList.add('hidden');
+                                }}
+                              >
+                                Close
+                              </Button>
+                            </div>
+                          </div>
                         </div>
 
                         {/* Review Modal */}
