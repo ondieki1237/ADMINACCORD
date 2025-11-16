@@ -9,11 +9,16 @@ import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Building, Users, Clock, Calendar, ArrowLeft, FileText, Phone, Mail, Plus, AlertCircle } from "lucide-react"
+import { Building, Users, Clock, Calendar, ArrowLeft, FileText, Phone, Mail, Plus, AlertCircle, TrendingUp } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
+import { CreateFollowUpForm } from "./create-follow-up-form"
+import { FollowUpList } from "./follow-up-list"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 
 interface Visit {
-  id: string
+  id?: string
+  _id?: string
   date: string
   startTime: string
   endTime: string
@@ -24,6 +29,7 @@ interface Visit {
   requestedEquipment: any[]
   notes: string
   status?: "scheduled" | "in-progress" | "completed" | "cancelled"
+  visitPurpose?: string
 }
 
 interface VisitDetailProps {
@@ -40,6 +46,7 @@ interface FollowUp {
 
 export function VisitDetail({ visit, onBack }: VisitDetailProps) {
   const [showFollowUpForm, setShowFollowUpForm] = useState(false)
+  const [showSalesFollowUp, setShowSalesFollowUp] = useState(false)
   const [followUp, setFollowUp] = useState<FollowUp>({
     action: "",
     assignedTo: "",
@@ -47,6 +54,12 @@ export function VisitDetail({ visit, onBack }: VisitDetailProps) {
     priority: "medium",
   })
   const { toast } = useToast()
+  
+  // Get the visit ID (could be _id or id)
+  const visitId = visit._id || visit.id || ""
+  
+  // Check if this is a sales visit
+  const isSalesVisit = visit.visitPurpose?.toLowerCase() === "sales"
 
   const calculateDuration = (startTime: string, endTime: string) => {
     const start = new Date(startTime)
@@ -247,6 +260,69 @@ export function VisitDetail({ visit, onBack }: VisitDetailProps) {
           </CardHeader>
           <CardContent>
             <p className="text-sm leading-relaxed">{visit.notes}</p>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Sales Follow-Up Section - Only for sales visits */}
+      {isSalesVisit && (
+        <Card className="border-2 border-[#008cf7]/30 bg-gradient-to-r from-[#008cf7]/5 to-blue-50/50">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-[#008cf7]">
+              <TrendingUp className="h-5 w-5" />
+              Sales Follow-Up
+            </CardTitle>
+            <CardDescription>Track deal progress and outcomes for this sales visit</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Tabs defaultValue="create" className="space-y-4">
+              <TabsList>
+                <TabsTrigger value="create">Create Follow-Up</TabsTrigger>
+                <TabsTrigger value="history">Follow-Up History</TabsTrigger>
+              </TabsList>
+
+              <TabsContent value="create">
+                {!showSalesFollowUp ? (
+                  <div className="text-center py-8">
+                    <Button 
+                      onClick={() => setShowSalesFollowUp(true)} 
+                      className="bg-[#008cf7] hover:bg-[#006bb8]"
+                    >
+                      <Plus className="h-4 w-4 mr-2" />
+                      Record Sales Follow-Up
+                    </Button>
+                    <p className="text-sm text-gray-500 mt-2">
+                      Track deal status: Sealed, In Progress, or Failed
+                    </p>
+                  </div>
+                ) : (
+                  <div>
+                    <CreateFollowUpForm
+                      visitId={visitId}
+                      visitDetails={{
+                        client: {
+                          name: visit.client?.name || "Unknown Client",
+                          location: (visit.client as any)?.location || "Unknown Location"
+                        },
+                        date: visit.date,
+                      }}
+                      onSuccess={() => {
+                        setShowSalesFollowUp(false)
+                        toast({
+                          title: "Success!",
+                          description: "Sales follow-up recorded successfully",
+                        })
+                      }}
+                      onCancel={() => setShowSalesFollowUp(false)}
+                    />
+                  </div>
+                )}
+              </TabsContent>
+
+              <TabsContent value="history">
+                <FollowUpList visitId={visitId} showVisitDetails={false} />
+              </TabsContent>
+            </Tabs>
           </CardContent>
         </Card>
       )}

@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { Home, MapPin, Users, User, Menu, LogOut } from "lucide-react"
+import { Home, MapPin, Users, User, Menu, LogOut, TrendingUp } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
 import { authService } from "@/lib/auth"
@@ -20,6 +20,7 @@ export function MobileNav({ currentPage, onPageChange }: MobileNavProps) {
     { id: "dashboard", label: "Dashboard", icon: Home },
     { id: "visits", label: "Visits", icon: Users },
     { id: "trails", label: "Trails", icon: MapPin },
+    { id: "follow-ups", label: "Follow-Ups", icon: TrendingUp },
     { id: "profile", label: "Profile", icon: User },
   ]
 

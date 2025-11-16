@@ -31,6 +31,7 @@ import {
   generateContactsExtractionPDF, 
   generateFacilitiesExtractionPDF 
 } from "@/lib/visitsPdfGenerator";
+import { FollowUpList } from "@/components/visits/follow-up-list";
 
 interface User {
   _id: string;
@@ -881,6 +882,17 @@ const VisitsPage = () => {
                       </a>
                     ))}
                   </div>
+                </div>
+              )}
+
+              {/* Sales Follow-Ups Section - Only for sales visits */}
+              {selectedVisit.visitPurpose?.toLowerCase() === "sales" && (
+                <div className="border-2 border-[#008cf7]/30 rounded-lg p-5 bg-gradient-to-r from-[#008cf7]/5 to-blue-50/50">
+                  <div className="flex items-center gap-2 mb-4">
+                    <TrendingUp className="w-5 h-5 text-[#008cf7]" />
+                    <h3 className="text-lg font-bold text-gray-900">Sales Follow-Ups</h3>
+                  </div>
+                  <FollowUpList visitId={selectedVisit._id} showVisitDetails={false} />
                 </div>
               )}
 

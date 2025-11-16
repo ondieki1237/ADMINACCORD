@@ -56,7 +56,16 @@ class ApiService {
   }
   private async makeRequest(endpoint: string, options: RequestInit = {}) {
     let token = authService.getAccessToken();
-    let response = await fetch(`${API_BASE_URL}${endpoint}`, {
+    const fullUrl = `${API_BASE_URL}${endpoint}`;
+    
+    console.log("🌐 API Request:", {
+      url: fullUrl,
+      method: options.method || 'GET',
+      hasToken: !!token,
+      endpoint
+    });
+    
+    let response = await fetch(fullUrl, {
       ...options,
       headers: {
         "Content-Type": "application/json",
@@ -65,8 +74,16 @@ class ApiService {
       },
     });
 
+    console.log("📡 API Response:", {
+      url: fullUrl,
+      status: response.status,
+      statusText: response.statusText,
+      ok: response.ok
+    });
+
     // If unauthorized, try to refresh the token and retry once
     if (response.status === 401) {
+      console.log("🔐 Got 401, attempting token refresh...");
       const refreshToken = authService.getRefreshToken && authService.getRefreshToken();
       if (refreshToken) {
         const refreshResponse = await fetch(`${API_BASE_URL}/auth/refresh`, {
@@ -80,8 +97,9 @@ class ApiService {
           if (newAccessToken && newRefreshToken) {
             authService.setTokens && authService.setTokens(newAccessToken, newRefreshToken);
             token = newAccessToken;
+            console.log("✅ Token refreshed, retrying request...");
             // Retry the original request with the new token
-            response = await fetch(`${API_BASE_URL}${endpoint}`, {
+            response = await fetch(fullUrl, {
               ...options,
               headers: {
                 "Content-Type": "application/json",
@@ -91,10 +109,12 @@ class ApiService {
             });
           }
         } else {
+          console.log("❌ Token refresh failed, logging out");
           // Refresh failed, log out
           authService.logout && authService.logout();
         }
       } else {
+        console.log("❌ No refresh token available, logging out");
         // No refresh token, log out
         authService.logout && authService.logout();
       }
@@ -105,6 +125,7 @@ class ApiService {
       let errorMsg = response.statusText;
       try {
         const errorData = await response.json();
+        console.error("❌ API Error Response:", errorData);
         if (errorData && errorData.message) {
           errorMsg = errorData.message;
         }
@@ -117,7 +138,9 @@ class ApiService {
       throw new Error(`API request failed: ${errorMsg}`);
     }
 
-    return response.json();
+    const responseData = await response.json();
+    console.log("✅ API Response Data:", responseData);
+    return responseData;
   }
 
   async getDashboardOverview(startDate?: string, endDate?: string, region?: string): Promise<any> {
@@ -317,6 +340,145 @@ class ApiService {
       method: "PUT",
       body: JSON.stringify(trailData),
     })
+  }
+
+  // Follow-up endpoints
+  async createFollowUp(followUpData: {
+    visitId: string;
+    date: string;
+    contactPerson: {
+      name: string;
+      role: string;
+      phone?: string;
+      email?: string;
+    };
+    outcome: 'deal_sealed' | 'in_progress' | 'deal_failed';
+    winningPoint?: string;
+    progressNotes?: string;
+    improvements?: string;
+    failureReasons?: string;
+  }): Promise<any> {
+    return this.makeRequest("/follow-ups", {
+      method: "POST",
+      body: JSON.stringify(followUpData),
+    });
+  }
+
+  async getFollowUps(filters: {
+    visitId?: string;
+    outcome?: string;
+    userId?: string;
+    startDate?: string;
+    endDate?: string;
+    page?: number;
+    limit?: number;
+  } = {}): Promise<any> {
+    const params = new URLSearchParams();
+    Object.entries(filters).forEach(([key, value]) => {
+      if (value !== undefined && value !== null && value !== "") {
+        params.append(key, String(value));
+      }
+    });
+    return this.makeRequest(`/follow-ups?${params.toString()}`);
+  }
+
+  async getAdminFollowUps(filters: {
+    visitId?: string;
+    outcome?: string;
+    userId?: string;
+    startDate?: string;
+    endDate?: string;
+  } = {}): Promise<any> {
+    const params = new URLSearchParams();
+    Object.entries(filters).forEach(([key, value]) => {
+      if (value !== undefined && value !== null && value !== "") {
+        params.append(key, String(value));
+      }
+    });
+    return this.makeRequest(`/follow-ups/admin?${params.toString()}`);
+  }
+
+  async getFollowUpById(followUpId: string): Promise<any> {
+    return this.makeRequest(`/follow-ups/${followUpId}`);
+  }
+
+  async updateFollowUp(followUpId: string, followUpData: {
+    date?: string;
+    contactPerson?: {
+      name: string;
+      role: string;
+      phone?: string;
+      email?: string;
+    };
+    outcome?: 'deal_sealed' | 'in_progress' | 'deal_failed';
+    winningPoint?: string;
+    progressNotes?: string;
+    improvements?: string;
+    failureReasons?: string;
+  }): Promise<any> {
+    return this.makeRequest(`/follow-ups/${followUpId}`, {
+      method: "PUT",
+      body: JSON.stringify(followUpData),
+    });
+  }
+
+  async deleteFollowUp(followUpId: string): Promise<any> {
+    return this.makeRequest(`/follow-ups/${followUpId}`, {
+      method: "DELETE",
+    });
+  }
+
+  async getFollowUpsByVisit(visitId: string): Promise<any> {
+    return this.getFollowUps({ visitId });
+  }
+
+  // Leads endpoints
+  async getLeads(page = 1, limit = 20, filters: Record<string, any> = {}, useAdminEndpoint = false): Promise<any> {
+    const params = new URLSearchParams({ 
+      page: String(page), 
+      limit: String(limit),
+      _t: String(Date.now()) // Cache buster
+    });
+    Object.entries(filters).forEach(([k, v]) => {
+      if (v !== undefined && v !== null && v !== "") params.set(k, String(v));
+    });
+    
+    // Use admin endpoint if user has admin access
+    const endpoint = useAdminEndpoint ? `/admin/leads` : `/leads`;
+    console.log(`📡 Using ${useAdminEndpoint ? 'ADMIN' : 'USER'} endpoint: ${endpoint}`);
+    
+    return this.makeRequest(`${endpoint}?${params.toString()}`, {
+      headers: {
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Pragma': 'no-cache',
+        'Expires': '0'
+      }
+    });
+  }
+
+  async getLeadById(leadId: string, useAdminEndpoint = false): Promise<any> {
+    const endpoint = useAdminEndpoint ? `/admin/leads` : `/leads`;
+    return this.makeRequest(`${endpoint}/${encodeURIComponent(leadId)}`);
+  }
+
+  async updateLead(leadId: string, payload: Record<string, any>, useAdminEndpoint = false): Promise<any> {
+    const endpoint = useAdminEndpoint ? `/admin/leads` : `/leads`;
+    return this.makeRequest(`${endpoint}/${encodeURIComponent(leadId)}`, {
+      method: "PUT",
+      body: JSON.stringify(payload),
+    });
+  }
+
+  async deleteLead(leadId: string, useAdminEndpoint = false): Promise<any> {
+    const endpoint = useAdminEndpoint ? `/admin/leads` : `/leads`;
+    return this.makeRequest(`${endpoint}/${encodeURIComponent(leadId)}`, {
+      method: "DELETE",
+    });
+  }
+
+  // Get lead history (admin only)
+  async getLeadHistory(leadId: string): Promise<any> {
+    return this.makeRequest(`/admin/leads/${encodeURIComponent(leadId)}/history`);
   }
 }
 

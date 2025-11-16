@@ -6,6 +6,7 @@ import { RegisterForm } from "@/components/auth/register-form"
 import { DashboardOverview } from "@/components/dashboard/dashboard-overview"
 import { TrailManagement } from "@/components/trails/trail-management"
 import { VisitManagement } from "@/components/visits/visit-management"
+import { FollowUpManager } from "@/components/visits/follow-up-manager"
 import { MobileNav } from "@/components/layout/mobile-nav"
 import { PWAInstall } from "@/components/mobile/pwa-install"
 import { OfflineIndicator } from "@/components/mobile/offline-indicator"
@@ -32,7 +33,7 @@ export default function HomePage() {
   }
 
   const handleSwipeLeft = () => {
-    const pages = ["dashboard", "visits", "trails", "profile"]
+    const pages = ["dashboard", "visits", "trails", "follow-ups", "profile"]
     const currentIndex = pages.indexOf(currentPage)
     if (currentIndex < pages.length - 1) {
       setCurrentPage(pages[currentIndex + 1])
@@ -40,7 +41,7 @@ export default function HomePage() {
   }
 
   const handleSwipeRight = () => {
-    const pages = ["dashboard", "visits", "trails", "profile"]
+    const pages = ["dashboard", "visits", "trails", "follow-ups", "profile"]
     const currentIndex = pages.indexOf(currentPage)
     if (currentIndex > 0) {
       setCurrentPage(pages[currentIndex - 1])
@@ -81,6 +82,8 @@ export default function HomePage() {
         return <VisitManagement />
       case "trails":
         return <TrailManagement />
+      case "follow-ups":
+        return <FollowUpManager />
       case "profile":
         return <UserProfile />
       default:

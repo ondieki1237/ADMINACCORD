@@ -11,7 +11,7 @@ import { authService } from "@/lib/auth";
 import { hasAdminAccess, canViewHeatmap } from "@/lib/permissions";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { BarChart3, Clock, MapPin, Shield, TrendingUp, Users, FileText, Download, Calendar, CheckCircle } from "lucide-react";
+import { BarChart3, Clock, MapPin, Shield, TrendingUp, Users, FileText, Download, Calendar, CheckCircle, UserPlus } from "lucide-react";
 import { Bar, Line } from "react-chartjs-2";
 import {
   Chart as ChartJS,
@@ -599,6 +599,16 @@ export function DashboardOverview() {
                 Quotations
               </Button>
 
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-gray-700 hover:text-[#008cf7] hover:bg-[#008cf7]/10"
+                onClick={() => (window.location.href = "/dashboard/leads")}
+              >
+                <UserPlus className="h-4 w-4 mr-2" />
+                Leads
+              </Button>
+
               <div className="h-6 w-px bg-gray-300 mx-2" />
 
               {/* Download Dropdown */}
@@ -687,6 +697,15 @@ export function DashboardOverview() {
             >
               <Download className="h-4 w-4 mr-2" />
               Export
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="flex-1 min-w-[140px]"
+              onClick={() => (window.location.href = "/dashboard/leads")}
+            >
+              <UserPlus className="h-4 w-4 mr-2" />
+              Leads
             </Button>
           </div>
         </div>
@@ -898,6 +917,14 @@ export function DashboardOverview() {
                       Sales Heatmap
                     </Button>
                   )}
+                  <Button
+                    variant="ghost"
+                    className="w-full justify-start text-gray-700 hover:bg-[#008cf7]/10 hover:text-[#008cf7]"
+                    onClick={() => (window.location.href = "/dashboard/leads")}
+                  >
+                    <UserPlus className="h-4 w-4 mr-3" />
+                    Leads
+                  </Button>
                   <Button
                     variant="ghost"
                     className="w-full justify-start text-gray-700 hover:bg-[#008cf7]/10 hover:text-[#008cf7]"

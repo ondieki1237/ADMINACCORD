@@ -5,11 +5,12 @@ import { useState, useEffect } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Users, Clock, Calendar, Plus, Building, FileText, Edit, Trash2, Eye } from "lucide-react"
+import { Users, Clock, Calendar, Plus, Building, FileText, Edit, Trash2, Eye, TrendingUp, CheckCircle, XCircle } from "lucide-react"
 import { apiService } from "@/lib/api"
 import { useToast } from "@/hooks/use-toast"
 import { authService } from "@/lib/auth"
 import { canEditRecords, canDeleteRecords } from "@/lib/permissions"
+import { useQuery } from "@tanstack/react-query"
 
 interface Visit {
   _id: string
@@ -23,12 +24,64 @@ interface Visit {
   requestedEquipment?: any[]
   notes?: string
   status?: "scheduled" | "in-progress" | "completed" | "cancelled"
+  visitPurpose?: string
 }
 
 interface VisitListProps {
   onCreateVisit: () => void
   onViewVisit: (visit: Visit) => void
 }
+
+// Component to show follow-up status for a visit
+function VisitFollowUpStatus({ visitId }: { visitId: string }) {
+  const { data: followUpsResponse } = useQuery({
+    queryKey: ["followUpsByVisit", visitId],
+    queryFn: () => apiService.getFollowUpsByVisit(visitId),
+  });
+
+  const followUps = followUpsResponse?.data || [];
+  
+  if (followUps.length === 0) return null;
+
+  // Get the most recent follow-up
+  const latest = followUps[0];
+  
+  const getOutcomeIcon = (outcome: string) => {
+    switch (outcome) {
+      case "deal_sealed":
+        return <CheckCircle className="h-3 w-3 text-green-600" />;
+      case "deal_failed":
+        return <XCircle className="h-3 w-3 text-red-600" />;
+      default:
+        return <Clock className="h-3 w-3 text-yellow-600" />;
+    }
+  };
+
+  const getOutcomeText = (outcome: string) => {
+    switch (outcome) {
+      case "deal_sealed":
+        return "Deal Sealed";
+      case "deal_failed":
+        return "Deal Failed";
+      default:
+        return "In Progress";
+    }
+  };
+
+  return (
+    <div className="flex items-center gap-2 text-xs mt-2 p-2 bg-blue-50 rounded border border-blue-200">
+      <TrendingUp className="h-3 w-3 text-[#008cf7]" />
+      <span className="font-medium text-[#008cf7]">Follow-ups: {followUps.length}</span>
+      {latest && (
+        <div className="flex items-center gap-1 ml-auto">
+          {getOutcomeIcon(latest.outcome)}
+          <span className="text-gray-600">{getOutcomeText(latest.outcome)}</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
 
 export function VisitList({ onCreateVisit, onViewVisit }: VisitListProps) {
   const [visits, setVisits] = useState<Visit[]>([])
@@ -223,6 +276,11 @@ export function VisitList({ onCreateVisit, onViewVisit }: VisitListProps) {
                         <FileText className="h-3 w-3 mt-0.5 text-muted-foreground" />
                         <span className="text-muted-foreground truncate">{visit.notes}</span>
                       </div>
+                    )}
+
+                    {/* Show follow-up status for sales visits */}
+                    {visit.visitPurpose?.toLowerCase() === "sales" && (
+                      <VisitFollowUpStatus visitId={visit._id} />
                     )}
 
                     <div className="flex gap-2 pt-2">
