@@ -1,30 +1,33 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import dynamic from "next/dynamic"
 import { LoginForm } from "@/components/auth/login-form"
 import { RegisterForm } from "@/components/auth/register-form"
-import { DashboardOverview } from "@/components/dashboard/dashboard-overview"
-import { TrailManagement } from "@/components/trails/trail-management"
-import { VisitManagement } from "@/components/visits/visit-management"
-import { FollowUpManager } from "@/components/visits/follow-up-manager"
 import { MobileNav } from "@/components/layout/mobile-nav"
-import { DashboardSidebar } from "@/components/layout/dashboard-sidebar"
 import { PWAInstall } from "@/components/mobile/pwa-install"
 import { OfflineIndicator } from "@/components/mobile/offline-indicator"
 import { MobileOptimizations } from "@/components/mobile/mobile-optimizations"
 import { TouchGestures } from "@/components/mobile/touch-gestures"
 import { authService } from "@/lib/auth"
 import { Toaster } from "@/components/ui/toaster"
-import { UserProfile } from "@/components/profile/user-profile"
-import ReportsManager from "@/components/dashboard/reports"
-import AdvancedAnalytics from "@/components/dashboard/advanced-analytics"
-import LeadsList from "@/components/dashboard/leads"
-import MachinesList from "@/components/dashboard/machines"
-import UserManager from "@/components/dashboard/user-manager"
-import PlannersManager from "@/components/dashboard/planners"
-import SalesHeatmap from "@/components/dashboard/sales-heatmap"
-import PerformanceAnalytics from "@/components/dashboard/performance-analytics"
-import EngineerReports from "@/components/dashboard/engineer-reports"
+
+// Dynamic imports with SSR disabled to prevent window access during build
+const DashboardOverview = dynamic(() => import("@/components/dashboard/dashboard-overview").then(mod => ({ default: mod.DashboardOverview })), { ssr: false })
+const TrailManagement = dynamic(() => import("@/components/trails/trail-management").then(mod => ({ default: mod.TrailManagement })), { ssr: false })
+const VisitManagement = dynamic(() => import("@/components/visits/visit-management").then(mod => ({ default: mod.VisitManagement })), { ssr: false })
+const FollowUpManager = dynamic(() => import("@/components/visits/follow-up-manager").then(mod => ({ default: mod.FollowUpManager })), { ssr: false })
+const DashboardSidebar = dynamic(() => import("@/components/layout/dashboard-sidebar").then(mod => ({ default: mod.DashboardSidebar })), { ssr: false })
+const UserProfile = dynamic(() => import("@/components/profile/user-profile").then(mod => ({ default: mod.UserProfile })), { ssr: false })
+const ReportsManager = dynamic(() => import("@/components/dashboard/reports"), { ssr: false })
+const AdvancedAnalytics = dynamic(() => import("@/components/dashboard/advanced-analytics"), { ssr: false })
+const LeadsList = dynamic(() => import("@/components/dashboard/leads"), { ssr: false })
+const MachinesList = dynamic(() => import("@/components/dashboard/machines"), { ssr: false })
+const UserManager = dynamic(() => import("@/components/dashboard/user-manager"), { ssr: false })
+const PlannersManager = dynamic(() => import("@/components/dashboard/planners"), { ssr: false })
+const SalesHeatmap = dynamic(() => import("@/components/dashboard/sales-heatmap"), { ssr: false })
+const PerformanceAnalytics = dynamic(() => import("@/components/dashboard/performance-analytics"), { ssr: false })
+const EngineerReports = dynamic(() => import("@/components/dashboard/engineer-reports"), { ssr: false })
 
 export default function HomePage() {
   const [isAuthenticated, setIsAuthenticated] = useState(false)

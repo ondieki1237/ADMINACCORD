@@ -72,6 +72,8 @@ export function DashboardOverview() {
   // Fetch visits data
   useEffect(() => {
     const fetchVisits = async () => {
+      if (typeof window === 'undefined') return;
+      
       try {
         const token = localStorage.getItem("accessToken")
         const res = await fetch("https://app.codewithseth.co.ke/api/visits", {
@@ -110,6 +112,8 @@ export function DashboardOverview() {
   // Fetch leads data with total count
   useEffect(() => {
     const fetchLeads = async () => {
+      if (typeof window === 'undefined') return;
+      
       setLeadsLoading(true)
       try {
         const token = localStorage.getItem("accessToken")
@@ -149,6 +153,8 @@ export function DashboardOverview() {
   const { data, isLoading, error, refetch } = useQuery({
     queryKey: ["dashboard", dateRange, currentUser?.region, currentUser?.id],
     queryFn: async () => {
+      if (typeof window === 'undefined') return null;
+      
       try {
         const token = localStorage.getItem("accessToken");
         const [overview, recentActivity, performance, visitsRes] = await Promise.all([
@@ -195,12 +201,15 @@ export function DashboardOverview() {
     },
     staleTime: 1000 * 60 * 5, // Cache for 5 minutes
     retry: 2,
+    enabled: typeof window !== 'undefined' && !!currentUser,
   });
 
   // Fetch performance trend data for chart
   const { data: performanceData } = useQuery({
     queryKey: ["performance", dateRange, currentUser?.region],
     queryFn: async () => {
+      if (typeof window === 'undefined') return [];
+      
       const token = localStorage.getItem("accessToken");
       const region = currentUser?.region || "North";
       const url = `https://app.codewithseth.co.ke/api/dashboard/performance?startDate=${dateRange.startDate}&endDate=${dateRange.endDate}&region=${region}`;
@@ -221,6 +230,7 @@ export function DashboardOverview() {
     queryKey: ["salesHeatmap"],
     queryFn: apiService.getSalesHeatmap,
     staleTime: 1000 * 60 * 10, // cache 10 mins
+    enabled: typeof window !== 'undefined',
   });
 
   // Transform recent activity
@@ -237,6 +247,8 @@ export function DashboardOverview() {
   const { data: leadsData, isLoading: leadsChartLoading } = useQuery({
     queryKey: ["allLeads"],
     queryFn: async () => {
+      if (typeof window === 'undefined') return [];
+      
       const token = localStorage.getItem("accessToken");
       const res = await fetch("https://app.codewithseth.co.ke/api/admin/leads?page=1&limit=1000", {
         headers: {
@@ -248,6 +260,7 @@ export function DashboardOverview() {
       return data?.data?.docs || data?.docs || data?.data || [];
     },
     staleTime: 1000 * 60 * 5,
+    enabled: typeof window !== 'undefined',
   });
 
   // Build date-indexed maps for visits and leads
@@ -337,6 +350,8 @@ export function DashboardOverview() {
 
   // Download Functions
   const downloadDashboardData = async (format: 'csv' | 'json' | 'excel') => {
+    if (typeof window === 'undefined') return;
+    
     try {
       const dashboardData = {
         summary: {
@@ -473,6 +488,8 @@ export function DashboardOverview() {
 
   // Refresh handler
   const handleRefresh = async () => {
+    if (typeof window === 'undefined') return;
+    
     setIsRefreshing(true);
     try {
       await refetch();
