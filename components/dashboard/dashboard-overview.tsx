@@ -11,7 +11,8 @@ import { authService } from "@/lib/auth";
 import { hasAdminAccess, canViewHeatmap } from "@/lib/permissions";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { BarChart3, Clock, MapPin, Shield, TrendingUp, Users, FileText, Download, Calendar, CheckCircle, UserPlus } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { BarChart3, Clock, MapPin, Shield, TrendingUp, Users, FileText, Download, Calendar, CheckCircle, UserPlus, Settings, RefreshCw } from "lucide-react";
 import { Bar, Line } from "react-chartjs-2";
 import {
   Chart as ChartJS,
@@ -35,9 +36,9 @@ import PerformanceAnalytics from "./performance-analytics";
 ChartJS.register(CategoryScale, LinearScale, BarElement, LineElement, PointElement, Title, Tooltip, Legend, Filler);
 
 interface DashboardData {
-  overview: { totalVisits: number; totalTrails: number };
+  overview: { totalVisits: number; totalLeads: number };
   recentActivity: any[];
-  performance: { visitsThisMonth: number; trailsThisMonth: number; averageVisitDuration: number; completionRate: number };
+  performance: { visitsThisMonth: number; leadsThisMonth: number; averageVisitDuration: number; completionRate: number };
   heatmap?: { [key: string]: number };
 }
 
@@ -47,8 +48,10 @@ export function DashboardOverview() {
     endDate: format(new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0), "yyyy-MM-dd"),
   });
   const [currentUser, setCurrentUser] = useState(authService.getCurrentUserSync());
-  const [totalVisits, setTotalVisits] = useState(0);
-  const [averageDuration, setAverageDuration] = useState(0);
+  const [totalVisits, setTotalVisits] = useState(0)
+  const [totalLeads, setTotalLeads] = useState(0)
+  const [leadsLoading, setLeadsLoading] = useState(true)
+  const [averageDuration, setAverageDuration] = useState(0)
   const [showQuotations, setShowQuotations] = useState(false);
   const [showEngineerReports, setShowEngineerReports] = useState(false);
   const [showReports, setShowReports] = useState(false);
@@ -104,8 +107,46 @@ export function DashboardOverview() {
     fetchVisits()
   }, []);
 
+  // Fetch leads data with total count
+  useEffect(() => {
+    const fetchLeads = async () => {
+      setLeadsLoading(true)
+      try {
+        const token = localStorage.getItem("accessToken")
+        const res = await fetch("https://app.codewithseth.co.ke/api/admin/leads?page=1&limit=1", {
+          headers: {
+            "Content-Type": "application/json",
+            ...(token ? { Authorization: `Bearer ${token}` } : {})
+          }
+        })
+        const data = await res.json()
+        
+        // Handle different API response formats
+        let totalCount = 0
+        if (data?.data?.totalDocs) {
+          // If API returns totalDocs (pagination info)
+          totalCount = data.data.totalDocs
+        } else if (data?.totalDocs) {
+          totalCount = data.totalDocs
+        } else {
+          // Fallback to counting docs array
+          const docs = data?.data?.docs || data?.docs || data?.data || []
+          totalCount = Array.isArray(docs) ? docs.length : 0
+        }
+        
+        setTotalLeads(totalCount)
+      } catch (err) {
+        console.error("Failed to fetch leads:", err)
+        setTotalLeads(0)
+      } finally {
+        setLeadsLoading(false)
+      }
+    }
+    fetchLeads()
+  }, []);
+
   // API calls with React Query
-  const { data, isLoading, error } = useQuery({
+  const { data, isLoading, error, refetch } = useQuery({
     queryKey: ["dashboard", dateRange, currentUser?.region, currentUser?.id],
     queryFn: async () => {
       try {
@@ -186,53 +227,56 @@ export function DashboardOverview() {
   const recentActivityArr = Array.isArray(data?.recentActivity) ? data.recentActivity : [];
   const transformedActivity = recentActivityArr.map((item: any, index: number) => ({
     id: item.id || index.toString(),
-    type: item.type || (index % 2 === 0 ? "visit" : "trail"),
+    type: item.type || (index % 2 === 0 ? "visit" : "lead"),
     description: item.description || item.action || `Activity ${index + 1}`,
     timestamp: item.timestamp || item.createdAt || new Date().toISOString(),
     client: item.client?.name || item.clientName,
   }));
 
-  // Fetch trails data FIRST
-  const { data: trailsData, isLoading: trailsLoading } = useQuery({
-    queryKey: ["allTrails"],
+  // Fetch leads data for chart
+  const { data: leadsData, isLoading: leadsChartLoading } = useQuery({
+    queryKey: ["allLeads"],
     queryFn: async () => {
       const token = localStorage.getItem("accessToken");
-      const res = await fetch("https://app.codewithseth.co.ke/api/dashboard/all-trails", {
+      const res = await fetch("https://app.codewithseth.co.ke/api/admin/leads?page=1&limit=1000", {
         headers: {
           "Content-Type": "application/json",
           ...(token ? { Authorization: `Bearer ${token}` } : {})
         }
       });
       const data = await res.json();
-      return data?.data || [];
+      return data?.data?.docs || data?.docs || data?.data || [];
     },
     staleTime: 1000 * 60 * 5,
   });
 
-  // Now you can safely use trailsData below
-  // Build date-indexed maps for visits and trails
-  const visitsResDocs = data?.overview?.visits || []; // If you have visits by date, else use your fetched docs
-  const trailsDocs = Array.isArray(trailsData) ? trailsData : [];
+  // Build date-indexed maps for visits and leads
+  const visitsResDocs = data?.overview?.visits || [];
+  const leadsDocs = Array.isArray(leadsData) ? leadsData : [];
 
   // Collect all unique dates from both datasets and sort chronologically (oldest to latest)
   const allDatesSet = new Set<string>();
   visitsResDocs.forEach((v: any) => v.date && allDatesSet.add(v.date.slice(0, 10)));
-  trailsDocs.forEach((t: any) => t.date && allDatesSet.add(t.date.slice(0, 10)));
+  leadsDocs.forEach((l: any) => {
+    const dateStr = l.createdAt || l.date;
+    if (dateStr) allDatesSet.add(dateStr.slice(0, 10));
+  });
   const allDates = Array.from(allDatesSet).sort((a, b) => a.localeCompare(b)); // Sort oldest to latest
 
-  // Count visits and trails per date
+  // Count visits and leads per date
   const visitsByDate: Record<string, number> = {};
   visitsResDocs.forEach((v: any) => {
     const d = v.date?.slice(0, 10);
     if (d) visitsByDate[d] = (visitsByDate[d] || 0) + 1;
   });
-  const trailsByDate: Record<string, number> = {};
-  trailsDocs.forEach((t: any) => {
-    const d = t.date?.slice(0, 10);
-    if (d) trailsByDate[d] = (trailsByDate[d] || 0) + 1;
+  const leadsByDate: Record<string, number> = {};
+  leadsDocs.forEach((l: any) => {
+    const dateStr = l.createdAt || l.date;
+    const d = dateStr?.slice(0, 10);
+    if (d) leadsByDate[d] = (leadsByDate[d] || 0) + 1;
   });
 
-  // Chart.js data for performance trends: Visits vs Trails
+  // Chart.js data for performance trends: Visits vs Leads
   const performanceChartData = {
     labels: allDates.map((d) => format(new Date(d), "MMM dd")),
     datasets: [
@@ -247,10 +291,10 @@ export function DashboardOverview() {
         pointHoverRadius: 6,
       },
       {
-        label: "Trails",
-        data: allDates.map((d) => trailsByDate[d] || 0),
-        borderColor: "hsl(var(--secondary))",
-        backgroundColor: "hsl(var(--secondary)/0.2)",
+        label: "Leads",
+        data: allDates.map((d) => leadsByDate[d] || 0),
+        borderColor: "rgb(147, 51, 234)",
+        backgroundColor: "rgba(147, 51, 234, 0.2)",
         fill: false,
         tension: 0.3,
         pointRadius: 4,
@@ -291,18 +335,13 @@ export function DashboardOverview() {
     ],
   };
 
-  // Calculate total trails and distance
-  const totalTrails = trailsDocs.length;
-  const totalTrailDistance = trailsDocs.reduce((sum, trail) => sum + (trail.totalDistance || 0), 0);
-
   // Download Functions
   const downloadDashboardData = async (format: 'csv' | 'json' | 'excel') => {
     try {
       const dashboardData = {
         summary: {
           totalVisits,
-          totalTrails,
-          totalTrailDistance: totalTrailDistance.toFixed(2),
+          totalLeads,
           averageVisitDuration: averageDuration,
           dateRange: dateRange,
           generatedAt: new Date().toISOString(),
@@ -313,7 +352,7 @@ export function DashboardOverview() {
           }
         },
         visits: visitsResDocs,
-        trails: trailsDocs,
+        leads: leadsDocs,
         recentActivity: transformedActivity,
         performance: data?.performance,
       };
@@ -348,8 +387,7 @@ export function DashboardOverview() {
         // Metrics
         csvRows.push('Metric,Value');
         csvRows.push(`Total Visits,${totalVisits}`);
-        csvRows.push(`Total Trails,${totalTrails}`);
-        csvRows.push(`Total Distance (km),${totalTrailDistance.toFixed(2)}`);
+        csvRows.push(`Total Leads,${totalLeads}`);
         csvRows.push(`Average Visit Duration (min),${averageDuration}`);
         csvRows.push('');
         
@@ -361,11 +399,12 @@ export function DashboardOverview() {
         });
         csvRows.push('');
         
-        // Trails data
-        csvRows.push('Trails');
-        csvRows.push('Date,Start Time,End Time,Distance (km),Stops');
-        trailsDocs.forEach((trail: any) => {
-          csvRows.push(`${trail.date},${trail.startTime},${trail.endTime},${trail.totalDistance?.toFixed(2) || 0},${trail.stops?.length || 0}`);
+        // Leads data
+        csvRows.push('Leads');
+        csvRows.push('Date,Name,Company,Status,Value');
+        leadsDocs.forEach((lead: any) => {
+          const date = lead.createdAt || lead.date || 'N/A';
+          csvRows.push(`${date},${lead.name || 'N/A'},${lead.company || 'N/A'},${lead.status || 'N/A'},${lead.value || 0}`);
         });
         
         const csvContent = csvRows.join('\n');
@@ -430,8 +469,50 @@ export function DashboardOverview() {
   };
 
   const [showDownloadMenu, setShowDownloadMenu] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
-  if (isLoading || trailsLoading) {
+  // Refresh handler
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    try {
+      await refetch();
+      // Also refetch leads
+      const token = localStorage.getItem("accessToken");
+      const res = await fetch("https://app.codewithseth.co.ke/api/admin/leads?page=1&limit=1", {
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
+        }
+      });
+      const data = await res.json();
+      let totalCount = 0;
+      if (data?.data?.totalDocs) {
+        totalCount = data.data.totalDocs;
+      } else if (data?.totalDocs) {
+        totalCount = data.totalDocs;
+      } else {
+        const docs = data?.data?.docs || data?.docs || data?.data || [];
+        totalCount = Array.isArray(docs) ? docs.length : 0;
+      }
+      setTotalLeads(totalCount);
+      
+      toast({
+        title: "Dashboard Refreshed",
+        description: "All data has been updated successfully",
+      });
+    } catch (err) {
+      console.error("Refresh failed:", err);
+      toast({
+        title: "Refresh Failed",
+        description: "Unable to refresh dashboard data",
+        variant: "destructive",
+      });
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
+
+  if (isLoading || leadsChartLoading) {
     return (
       <div className="space-y-6">
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
@@ -537,272 +618,254 @@ export function DashboardOverview() {
     );
   }
 
-  // Replace the previous return JSX with an improved modern layout + subtle animations
+  // Enhanced modern professional layout with improved visual hierarchy and sidebar support
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50/30">
-      <div className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
-        {/* Header Section - Fixed Height */}
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-200/60 p-6">
-          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-            {/* Title Area */}
-            <div className="flex items-center gap-4">
-              <div className="flex-shrink-0 w-12 h-12 rounded-xl bg-gradient-to-br from-[#008cf7] to-[#0066cc] shadow-lg flex items-center justify-center">
-                <MapPin className="h-6 w-6 text-white" />
-              </div>
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-blue-50/20 to-gray-50">
+      <div className="max-w-full mx-auto px-3 sm:px-4 lg:px-8 py-4 sm:py-6 lg:py-8 space-y-4 sm:space-y-6">
+        {/* Simplified Header - Cleaner with sidebar layout */}
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100/80 overflow-hidden">
+          <div className="bg-gradient-to-r from-[#008cf7] to-[#006bb8] p-6 sm:p-8">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+              {/* Title Area */}
               <div>
-                <h1 className="text-2xl font-bold text-gray-900">Dashboard Overview</h1>
-                <p className="text-sm text-gray-600">
+                <h1 className="text-2xl sm:text-3xl font-bold text-white tracking-tight">Dashboard Overview</h1>
+                <p className="text-sm sm:text-base text-white/90 mt-1 font-medium">
                   {currentUser ? `${currentUser.firstName} ${currentUser.lastName} • ${currentUser.role} • ${currentUser.region}` : "Loading..."}
                 </p>
               </div>
-            </div>
 
-            {/* Action Buttons - Desktop */}
-            <div className="hidden lg:flex items-center gap-2">
-              <Button
-                variant="ghost"
-                size="sm"
-                className="text-gray-700 hover:text-[#008cf7] hover:bg-[#008cf7]/10"
-                onClick={() => setShowReports(true)}
-              >
-                <BarChart3 className="h-4 w-4 mr-2" />
-                Reports
-              </Button>
-
-              <Button
-                variant="ghost"
-                size="sm"
-                className="text-gray-700 hover:text-[#008cf7] hover:bg-[#008cf7]/10"
-                onClick={() => setShowPerformance(true)}
-              >
-                <TrendingUp className="h-4 w-4 mr-2" />
-                Performance
-              </Button>
-
-              <Button
-                variant="ghost"
-                size="sm"
-                className="text-gray-700 hover:text-[#008cf7] hover:bg-[#008cf7]/10"
-                onClick={() => setShowVisits(true)}
-              >
-                <Clock className="h-4 w-4 mr-2" />
-                Visits
-              </Button>
-
-              <Button
-                variant="ghost"
-                size="sm"
-                className="text-gray-700 hover:text-[#008cf7] hover:bg-[#008cf7]/10"
-                onClick={() => setShowQuotations(true)}
-              >
-                <FileText className="h-4 w-4 mr-2" />
-                Quotations
-              </Button>
-
-              <Button
-                variant="ghost"
-                size="sm"
-                className="text-gray-700 hover:text-[#008cf7] hover:bg-[#008cf7]/10"
-                onClick={() => (window.location.href = "/dashboard/leads")}
-              >
-                <UserPlus className="h-4 w-4 mr-2" />
-                Leads
-              </Button>
-
-              <div className="h-6 w-px bg-gray-300 mx-2" />
-
-              {/* Download Dropdown */}
-              <div className="relative">
+              {/* Actions - Desktop */}
+              <div className="hidden sm:flex items-center gap-2">
+                {/* Refresh Button */}
                 <Button
-                  variant="outline"
+                  variant="ghost"
                   size="sm"
-                  className="border-[#008cf7] text-[#008cf7] hover:bg-[#008cf7] hover:text-white"
+                  onClick={handleRefresh}
+                  disabled={isRefreshing}
+                  className="bg-white/20 text-white hover:bg-white/30 backdrop-blur-sm border border-white/40 transition-all duration-200"
+                >
+                  <RefreshCw className={`h-4 w-4 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
+                  Refresh
+                </Button>
+                
+                {/* Enhanced Download Dropdown */}
+                <div className="relative">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="bg-white/20 text-white hover:bg-white/30 backdrop-blur-sm border border-white/40 transition-all duration-200"
+                    onClick={() => setShowDownloadMenu(!showDownloadMenu)}
+                  >
+                    <Download className="h-4 w-4 mr-2" />
+                    Export
+                  </Button>
+                  
+                  {showDownloadMenu && (
+                    <>
+                      <div 
+                        className="fixed inset-0 z-40" 
+                        onClick={() => setShowDownloadMenu(false)}
+                      />
+                      <div className="absolute right-0 mt-2 w-56 bg-white rounded-xl shadow-2xl border border-gray-100 z-50 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
+                        <div className="py-2">
+                          <button
+                            className="w-full text-left px-4 py-3 hover:bg-blue-50 flex items-center gap-3 text-sm text-gray-700 transition-colors group"
+                            onClick={() => {
+                              downloadDashboardData('csv');
+                              setShowDownloadMenu(false);
+                            }}
+                          >
+                            <div className="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center group-hover:bg-[#008cf7] transition-colors">
+                              <FileText className="h-4 w-4 text-[#008cf7] group-hover:text-white transition-colors" />
+                            </div>
+                            <div>
+                              <div className="font-medium">Export as CSV</div>
+                              <div className="text-xs text-gray-500">Download spreadsheet</div>
+                            </div>
+                          </button>
+                          <button
+                            className="w-full text-left px-4 py-3 hover:bg-blue-50 flex items-center gap-3 text-sm text-gray-700 transition-colors group"
+                            onClick={() => {
+                              downloadDashboardData('json');
+                              setShowDownloadMenu(false);
+                            }}
+                          >
+                            <div className="w-8 h-8 rounded-lg bg-purple-100 flex items-center justify-center group-hover:bg-purple-600 transition-colors">
+                              <FileText className="h-4 w-4 text-purple-600 group-hover:text-white transition-colors" />
+                            </div>
+                            <div>
+                              <div className="font-medium">Export as JSON</div>
+                              <div className="text-xs text-gray-500">Download data file</div>
+                            </div>
+                          </button>
+                          <button
+                            className="w-full text-left px-4 py-3 hover:bg-blue-50 flex items-center gap-3 text-sm text-gray-700 transition-colors group"
+                            onClick={() => {
+                              downloadDashboardData('excel');
+                              setShowDownloadMenu(false);
+                            }}
+                          >
+                            <div className="w-8 h-8 rounded-lg bg-green-100 flex items-center justify-center group-hover:bg-green-600 transition-colors">
+                              <FileText className="h-4 w-4 text-green-600 group-hover:text-white transition-colors" />
+                            </div>
+                            <div>
+                              <div className="font-medium">Analytics Excel</div>
+                              <div className="text-xs text-gray-500">Full analytics report</div>
+                            </div>
+                          </button>
+                        </div>
+                      </div>
+                    </>
+                  )}
+                </div>
+              </div>
+
+              {/* Mobile Export Button */}
+              <div className="sm:hidden">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="w-full bg-white/20 text-white hover:bg-white/30 backdrop-blur-sm border border-white/40"
                   onClick={() => setShowDownloadMenu(!showDownloadMenu)}
                 >
                   <Download className="h-4 w-4 mr-2" />
-                  Export
+                  Export Data
                 </Button>
-                
-                {showDownloadMenu && (
-                  <>
-                    <div 
-                      className="fixed inset-0 z-40" 
-                      onClick={() => setShowDownloadMenu(false)}
-                    />
-                    <div className="absolute right-0 mt-2 w-56 bg-white rounded-lg shadow-xl border border-gray-200 z-50">
-                      <div className="py-2">
-                        <button
-                          className="w-full text-left px-4 py-2.5 hover:bg-gray-50 flex items-center gap-3 text-sm text-gray-700 transition-colors"
-                          onClick={() => {
-                            downloadDashboardData('csv');
-                            setShowDownloadMenu(false);
-                          }}
-                        >
-                          <FileText className="h-4 w-4 text-gray-500" />
-                          Export as CSV
-                        </button>
-                        <button
-                          className="w-full text-left px-4 py-2.5 hover:bg-gray-50 flex items-center gap-3 text-sm text-gray-700 transition-colors"
-                          onClick={() => {
-                            downloadDashboardData('json');
-                            setShowDownloadMenu(false);
-                          }}
-                        >
-                          <FileText className="h-4 w-4 text-gray-500" />
-                          Export as JSON
-                        </button>
-                        <button
-                          className="w-full text-left px-4 py-2.5 hover:bg-gray-50 flex items-center gap-3 text-sm text-gray-700 transition-colors"
-                          onClick={() => {
-                            downloadDashboardData('excel');
-                            setShowDownloadMenu(false);
-                          }}
-                        >
-                          <FileText className="h-4 w-4 text-gray-500" />
-                          Analytics Excel Report
-                        </button>
-                      </div>
-                    </div>
-                  </>
-                )}
               </div>
             </div>
           </div>
-
-          {/* Mobile Actions */}
-          <div className="lg:hidden mt-4 flex flex-wrap gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              className="flex-1 min-w-[140px]"
-              onClick={() => setShowReports(true)}
-            >
-              <BarChart3 className="h-4 w-4 mr-2" />
-              Reports
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              className="flex-1 min-w-[140px]"
-              onClick={() => setShowVisits(true)}
-            >
-              <Clock className="h-4 w-4 mr-2" />
-              Visits
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              className="flex-1 min-w-[140px] border-[#008cf7] text-[#008cf7]"
-              onClick={() => setShowDownloadMenu(!showDownloadMenu)}
-            >
-              <Download className="h-4 w-4 mr-2" />
-              Export
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              className="flex-1 min-w-[140px]"
-              onClick={() => (window.location.href = "/dashboard/leads")}
-            >
-              <UserPlus className="h-4 w-4 mr-2" />
-              Leads
-            </Button>
-          </div>
         </div>
 
-        {/* Stats Cards Row - Consistent Heights */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <Card className="bg-white hover:shadow-lg transition-all duration-200 border border-gray-200/60">
-            <CardContent className="p-6">
+        {/* Stats Cards Row - Enhanced Modern Cards with Animations */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+          {/* Total Visits Card */}
+          <Card className="bg-white hover:shadow-xl transition-all duration-300 border border-gray-100 overflow-hidden group">
+            <CardContent className="p-5 sm:p-6">
               <div className="flex items-center justify-between mb-4">
-                <div className="w-10 h-10 rounded-lg bg-blue-100 flex items-center justify-center">
-                  <MapPin className="h-5 w-5 text-[#008cf7]" />
+                <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl bg-gradient-to-br from-blue-100 to-blue-50 flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
+                  <MapPin className="h-5 w-5 sm:h-6 sm:w-6 text-[#008cf7]" />
                 </div>
-                <span className="text-xs font-medium text-green-600 bg-green-50 px-2 py-1 rounded-full">
+                <span className="text-xs font-semibold text-green-600 bg-green-50 px-2.5 py-1 rounded-full border border-green-200">
                   Active
                 </span>
               </div>
               <div>
-                <p className="text-sm font-medium text-gray-600 mb-1">Total Visits</p>
-                <p className="text-3xl font-bold text-gray-900">{totalVisits}</p>
-                <p className="text-xs text-gray-500 mt-1">This period</p>
+                <p className="text-xs sm:text-sm font-medium text-gray-500 mb-1.5 uppercase tracking-wide">Total Visits</p>
+                <p className="text-3xl sm:text-4xl font-bold text-gray-900 mb-1">{totalVisits.toLocaleString()}</p>
+                <p className="text-xs text-gray-400 flex items-center gap-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse"></span>
+                  This period
+                </p>
               </div>
             </CardContent>
           </Card>
 
-          <Card className="bg-white hover:shadow-lg transition-all duration-200 border border-gray-200/60">
-            <CardContent className="p-6">
+          {/* Total Leads Card */}
+          <Card className="bg-white hover:shadow-xl transition-all duration-300 border border-gray-100 overflow-hidden group">
+            <CardContent className="p-5 sm:p-6">
               <div className="flex items-center justify-between mb-4">
-                <div className="w-10 h-10 rounded-lg bg-purple-100 flex items-center justify-center">
-                  <TrendingUp className="h-5 w-5 text-purple-600" />
+                <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl bg-gradient-to-br from-purple-100 to-purple-50 flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
+                  <UserPlus className="h-5 w-5 sm:h-6 sm:w-6 text-purple-600" />
                 </div>
-                <span className="text-xs font-medium text-blue-600 bg-blue-50 px-2 py-1 rounded-full">
-                  Tracking
+                <span className="text-xs font-semibold text-purple-600 bg-purple-50 px-2.5 py-1 rounded-full border border-purple-200">
+                  Prospects
                 </span>
               </div>
               <div>
-                <p className="text-sm font-medium text-gray-600 mb-1">Total Trails</p>
-                <p className="text-3xl font-bold text-gray-900">{totalTrails}</p>
-                <p className="text-xs text-gray-500 mt-1">{totalTrailDistance.toFixed(2)} km covered</p>
+                <p className="text-xs sm:text-sm font-medium text-gray-500 mb-1.5 uppercase tracking-wide">Total Leads</p>
+                {leadsLoading ? (
+                  <div className="flex items-center gap-2 mb-1">
+                    <div className="h-10 w-24 bg-purple-100 animate-pulse rounded"></div>
+                  </div>
+                ) : (
+                  <p className="text-3xl sm:text-4xl font-bold text-gray-900 mb-1">{totalLeads.toLocaleString()}</p>
+                )}
+                <p className="text-xs text-gray-400 flex items-center gap-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-purple-500"></span>
+                  Pipeline opportunities
+                </p>
               </div>
             </CardContent>
           </Card>
 
-          <Card className="bg-white hover:shadow-lg transition-all duration-200 border border-gray-200/60">
-            <CardContent className="p-6">
+          {/* Visit Duration Card */}
+          <Card className="bg-white hover:shadow-xl transition-all duration-300 border border-gray-100 overflow-hidden group">
+            <CardContent className="p-5 sm:p-6">
               <div className="flex items-center justify-between mb-4">
-                <div className="w-10 h-10 rounded-lg bg-orange-100 flex items-center justify-center">
-                  <Clock className="h-5 w-5 text-orange-600" />
+                <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl bg-gradient-to-br from-orange-100 to-orange-50 flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
+                  <Clock className="h-5 w-5 sm:h-6 sm:w-6 text-orange-600" />
                 </div>
-                <span className="text-xs font-medium text-gray-600 bg-gray-100 px-2 py-1 rounded-full">
-                  Avg
+                <span className="text-xs font-semibold text-gray-600 bg-gray-100 px-2.5 py-1 rounded-full border border-gray-200">
+                  Average
                 </span>
               </div>
               <div>
-                <p className="text-sm font-medium text-gray-600 mb-1">Visit Duration</p>
-                <p className="text-3xl font-bold text-gray-900">{averageDuration}<span className="text-lg text-gray-500">m</span></p>
-                <p className="text-xs text-gray-500 mt-1">Per visit</p>
+                <p className="text-xs sm:text-sm font-medium text-gray-500 mb-1.5 uppercase tracking-wide">Visit Duration</p>
+                <p className="text-3xl sm:text-4xl font-bold text-gray-900 mb-1">
+                  {averageDuration}<span className="text-lg sm:text-xl text-gray-400 ml-1">min</span>
+                </p>
+                <p className="text-xs text-gray-400 flex items-center gap-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-orange-500"></span>
+                  Per visit
+                </p>
               </div>
             </CardContent>
           </Card>
 
-          <Card className="bg-white hover:shadow-lg transition-all duration-200 border border-gray-200/60">
-            <CardContent className="p-6">
+          {/* Completion Rate Card */}
+          <Card className="bg-white hover:shadow-xl transition-all duration-300 border border-gray-100 overflow-hidden group">
+            <CardContent className="p-5 sm:p-6">
               <div className="flex items-center justify-between mb-4">
-                <div className="w-10 h-10 rounded-lg bg-green-100 flex items-center justify-center">
-                  <CheckCircle className="h-5 w-5 text-green-600" />
+                <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl bg-gradient-to-br from-green-100 to-green-50 flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
+                  <CheckCircle className="h-5 w-5 sm:h-6 sm:w-6 text-green-600" />
                 </div>
-                <span className="text-xs font-medium text-green-600 bg-green-50 px-2 py-1 rounded-full">
+                <span className="text-xs font-semibold text-green-600 bg-green-50 px-2.5 py-1 rounded-full border border-green-200">
                   {Math.round(data?.performance.completionRate || 0)}%
                 </span>
               </div>
               <div>
-                <p className="text-sm font-medium text-gray-600 mb-1">Completion Rate</p>
-                <p className="text-3xl font-bold text-gray-900">{data?.performance.visitsThisMonth ?? 0}</p>
-                <p className="text-xs text-gray-500 mt-1">Visits this month</p>
+                <p className="text-xs sm:text-sm font-medium text-gray-500 mb-1.5 uppercase tracking-wide">Completion Rate</p>
+                <p className="text-3xl sm:text-4xl font-bold text-gray-900 mb-1">{data?.performance.visitsThisMonth ?? 0}</p>
+                <p className="text-xs text-gray-400 flex items-center gap-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-green-500"></span>
+                  Visits this month
+                </p>
               </div>
             </CardContent>
           </Card>
         </div>
 
-        {/* Charts Row - Equal Heights */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <Card className="lg:col-span-2 bg-white border border-gray-200/60">
-            <CardHeader className="border-b border-gray-100 pb-4">
+        {/* Charts Section - Enhanced Professional Layout */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
+          {/* Performance Trends - Takes 2/3 width on desktop */}
+          <Card className="lg:col-span-2 bg-white border border-gray-100 shadow-sm hover:shadow-lg transition-all duration-300 overflow-hidden">
+            <CardHeader className="border-b border-gray-50 bg-gradient-to-r from-gray-50/50 to-transparent pb-5">
               <div className="flex items-center justify-between">
-                <div>
-                  <CardTitle className="text-lg font-semibold text-gray-900 flex items-center gap-2">
-                    <TrendingUp className="h-5 w-5 text-[#008cf7]" />
-                    Performance Trends
-                  </CardTitle>
-                  <CardDescription className="text-sm text-gray-600 mt-1">
-                    Visits vs Trails over time
-                  </CardDescription>
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#008cf7] to-[#006bb8] flex items-center justify-center shadow-lg">
+                    <TrendingUp className="h-5 w-5 text-white" />
+                  </div>
+                  <div>
+                    <CardTitle className="text-lg font-bold text-gray-900">Performance Trends</CardTitle>
+                    <CardDescription className="text-xs text-gray-500 mt-0.5">
+                      Visits vs Trails over time
+                    </CardDescription>
+                  </div>
+                </div>
+                <div className="hidden sm:flex items-center gap-4 text-xs">
+                  <div className="flex items-center gap-2">
+                    <div className="w-3 h-3 rounded-full bg-[#008cf7]"></div>
+                    <span className="text-gray-600 font-medium">Visits</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="w-3 h-3 rounded-full bg-orange-500"></div>
+                    <span className="text-gray-600 font-medium">Trails</span>
+                  </div>
                 </div>
               </div>
             </CardHeader>
-            <CardContent className="pt-6 pb-4">
-              <div className="h-80">
+            <CardContent className="pt-6 pb-4 px-4 sm:px-6">
+              <div className="h-[280px] sm:h-80">
                 <Line
                   data={performanceChartData}
                   options={{
@@ -815,73 +878,36 @@ export function DashboardOverview() {
                         labels: {
                           usePointStyle: true,
                           padding: 15,
-                          font: { size: 12 }
+                          font: { size: 12, weight: 'bold' },
+                          color: '#374151'
                         }
                       },
                       tooltip: { 
                         mode: "index", 
                         intersect: false,
-                        backgroundColor: 'rgba(0, 0, 0, 0.8)',
-                        padding: 12,
-                        cornerRadius: 8
+                        backgroundColor: 'rgba(0, 0, 0, 0.85)',
+                        padding: 14,
+                        cornerRadius: 10,
+                        titleFont: { size: 13, weight: 'bold' },
+                        bodyFont: { size: 12 }
                       },
                     },
                     interaction: { mode: "nearest", axis: "x", intersect: false },
                     scales: {
                       x: { 
                         grid: { display: false },
-                        ticks: { font: { size: 11 } }
-                      },
-                      y: { 
-                        beginAtZero: true,
-                        ticks: { font: { size: 11 } },
-                        grid: { color: 'rgba(0, 0, 0, 0.05)' }
-                      },
-                    },
-                  }}
-                />
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="bg-white border border-gray-200/60">
-            <CardHeader className="border-b border-gray-100 pb-4">
-              <CardTitle className="text-lg font-semibold text-gray-900 flex items-center gap-2">
-                <BarChart3 className="h-5 w-5 text-[#008cf7]" />
-                Top Performers
-              </CardTitle>
-              <CardDescription className="text-sm text-gray-600 mt-1">
-                Sales rep activity
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="pt-6 pb-4">
-              <div className="h-80">
-                <Bar
-                  data={salesHeatmapChartData}
-                  options={{
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                      legend: { display: false },
-                      tooltip: {
-                        backgroundColor: 'rgba(0, 0, 0, 0.8)',
-                        padding: 12,
-                        cornerRadius: 8
-                      }
-                    },
-                    scales: {
-                      x: { 
-                        grid: { display: false },
                         ticks: { 
-                          font: { size: 10 },
-                          maxRotation: 45,
-                          minRotation: 45
+                          font: { size: 11 },
+                          color: '#6b7280'
                         }
                       },
                       y: { 
                         beginAtZero: true,
-                        ticks: { font: { size: 11 } },
-                        grid: { color: 'rgba(0, 0, 0, 0.05)' }
+                        ticks: { 
+                          font: { size: 11 },
+                          color: '#6b7280'
+                        },
+                        grid: { color: 'rgba(0, 0, 0, 0.04)' }
                       },
                     },
                   }}
@@ -889,108 +915,159 @@ export function DashboardOverview() {
               </div>
             </CardContent>
           </Card>
+
+          {/* Top Performers - 1/3 width on desktop */}
+          <Card className="bg-white border border-gray-100 shadow-sm hover:shadow-lg transition-all duration-300 overflow-hidden">
+            <CardHeader className="border-b border-gray-50 bg-gradient-to-r from-gray-50/50 to-transparent pb-5">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500 to-purple-600 flex items-center justify-center shadow-lg">
+                  <BarChart3 className="h-5 w-5 text-white" />
+                </div>
+                <div>
+                  <CardTitle className="text-lg font-bold text-gray-900">Top Performers</CardTitle>
+                  <CardDescription className="text-xs text-gray-500 mt-0.5">
+                    Sales rep activity
+                  </CardDescription>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="pt-6 pb-4 px-4 sm:px-6">
+              <div className="h-[280px] sm:h-80">
+                {heatmapLoading ? (
+                  <div className="h-full flex items-center justify-center">
+                    <div className="text-sm text-gray-400 flex flex-col items-center gap-2">
+                      <div className="w-8 h-8 border-4 border-gray-200 border-t-[#008cf7] rounded-full animate-spin"></div>
+                      <span>Loading data...</span>
+                    </div>
+                  </div>
+                ) : (
+                  <Bar
+                    data={salesHeatmapChartData}
+                    options={{
+                      responsive: true,
+                      maintainAspectRatio: false,
+                      plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                          backgroundColor: 'rgba(0, 0, 0, 0.85)',
+                          padding: 14,
+                          cornerRadius: 10,
+                          titleFont: { size: 13, weight: 'bold' },
+                          bodyFont: { size: 12 }
+                        }
+                      },
+                      scales: {
+                        x: { 
+                          grid: { display: false },
+                          ticks: { 
+                            font: { size: 9 },
+                            maxRotation: 45,
+                            minRotation: 45,
+                            color: '#6b7280'
+                          }
+                        },
+                        y: { 
+                          beginAtZero: true,
+                          ticks: { 
+                            font: { size: 11 },
+                            color: '#6b7280'
+                          },
+                          grid: { color: 'rgba(0, 0, 0, 0.04)' }
+                        },
+                      },
+                    }}
+                  />
+                )}
+              </div>
+            </CardContent>
+          </Card>
         </div>
 
-        {/* Bottom Grid - Recent Activity & Quick Actions */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <div className="lg:col-span-2">
-            <RecentActivity activities={transformedActivity} />
-          </div>
-
-          <div className="space-y-4">
-            <Card className="bg-white border border-gray-200/60">
-              <CardHeader className="border-b border-gray-100 pb-4">
-                <CardTitle className="text-lg font-semibold text-gray-900 flex items-center gap-2">
-                  <Shield className="h-5 w-5 text-[#008cf7]" />
-                  Quick Actions
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="pt-4">
-                <div className="space-y-2">
-                  {canViewHeatmap(currentUser) && (
-                    <Button
-                      variant="ghost"
-                      className="w-full justify-start text-gray-700 hover:bg-[#008cf7]/10 hover:text-[#008cf7]"
-                      onClick={() => (window.location.href = "/dashboard/sales-heatmap")}
-                    >
-                      <MapPin className="h-4 w-4 mr-3" />
-                      Sales Heatmap
-                    </Button>
-                  )}
-                  <Button
-                    variant="ghost"
-                    className="w-full justify-start text-gray-700 hover:bg-[#008cf7]/10 hover:text-[#008cf7]"
-                    onClick={() => (window.location.href = "/dashboard/leads")}
-                  >
-                    <UserPlus className="h-4 w-4 mr-3" />
-                    Leads
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    className="w-full justify-start text-gray-700 hover:bg-[#008cf7]/10 hover:text-[#008cf7]"
-                    onClick={() => (window.location.href = "/dashboard/user-manager")}
-                  >
-                    <Users className="h-4 w-4 mr-3" />
-                    User Management
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    className="w-full justify-start text-gray-700 hover:bg-[#008cf7]/10 hover:text-[#008cf7]"
-                    onClick={() => (window.location.href = "/dashboard/advanced-analytics")}
-                  >
-                    <TrendingUp className="h-4 w-4 mr-3" />
-                    Advanced Analytics
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    className="w-full justify-start text-gray-700 hover:bg-[#008cf7]/10 hover:text-[#008cf7]"
-                    onClick={() => setShowEngineerReports(true)}
-                  >
-                    <FileText className="h-4 w-4 mr-3" />
-                    Engineer Reports
-                  </Button>
-                  <Button
-                    variant="outline"
-                    className="w-full justify-start bg-black text-white hover:bg-gray-800 border-black"
-                    onClick={() => (window.location.href = "/dashboard/planners")}
-                  >
-                    <Calendar className="h-4 w-4 mr-3" />
-                    Weekly Planners
-                  </Button>
+        {/* Bottom Section - Full Width Recent Activity */}
+        <Card className="bg-white border border-gray-100 shadow-sm hover:shadow-lg transition-all duration-300 overflow-hidden">
+          <CardHeader className="border-b border-gray-50 bg-gradient-to-r from-gray-50/50 to-transparent pb-5">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#008cf7] to-[#006bb8] flex items-center justify-center shadow-lg">
+                  <Clock className="h-5 w-5 text-white" />
                 </div>
-              </CardContent>
-            </Card>
-
-            <Card className="bg-white border border-gray-200/60">
-              <CardHeader className="border-b border-gray-100 pb-4">
-                <CardTitle className="text-lg font-semibold text-gray-900 flex items-center gap-2">
-                  <FileText className="h-5 w-5 text-[#008cf7]" />
-                  Monthly Summary
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="pt-4">
-                <div className="space-y-3">
-                  <div className="flex justify-between items-center py-2 border-b border-gray-100">
-                    <span className="text-sm text-gray-600">Trails This Month</span>
-                    <span className="text-sm font-semibold text-gray-900">{data?.performance.trailsThisMonth ?? 0}</span>
-                  </div>
-                  <div className="flex justify-between items-center py-2 border-b border-gray-100">
-                    <span className="text-sm text-gray-600">Visits This Month</span>
-                    <span className="text-sm font-semibold text-gray-900">{data?.performance.visitsThisMonth ?? 0}</span>
-                  </div>
-                  <div className="flex justify-between items-center py-2 border-b border-gray-100">
-                    <span className="text-sm text-gray-600">Avg Visit Duration</span>
-                    <span className="text-sm font-semibold text-gray-900">{Math.round(data?.performance.averageVisitDuration || 0)}m</span>
-                  </div>
-                  <div className="flex justify-between items-center py-2">
-                    <span className="text-sm text-gray-600">Completion Rate</span>
-                    <span className="text-sm font-semibold text-green-600">{Math.round(data?.performance.completionRate || 0)}%</span>
-                  </div>
+                <div>
+                  <CardTitle className="text-lg font-bold text-gray-900">Recent Activity</CardTitle>
+                  <CardDescription className="text-xs text-gray-500 mt-0.5">
+                    Latest visits and trails
+                  </CardDescription>
                 </div>
-              </CardContent>
-            </Card>
-          </div>
-        </div>
+              </div>
+              <Badge variant="outline" className="text-xs bg-blue-50 text-[#008cf7] border-[#008cf7]/30">
+                {transformedActivity.length} items
+              </Badge>
+            </div>
+          </CardHeader>
+          <CardContent className="p-4 sm:p-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 max-h-[500px] overflow-y-auto scrollbar-thin scrollbar-thumb-gray-200 scrollbar-track-transparent">
+              {transformedActivity.length === 0 ? (
+                <div className="col-span-full flex flex-col items-center justify-center py-12 px-4">
+                  <div className="w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center mb-4">
+                    <Clock className="h-8 w-8 text-gray-400" />
+                  </div>
+                  <p className="text-sm text-gray-500 font-medium">No recent activity</p>
+                  <p className="text-xs text-gray-400 mt-1">Activity will appear here as it happens</p>
+                </div>
+              ) : (
+                transformedActivity.map((activity, index) => (
+                  <div 
+                    key={activity.id} 
+                    className="group flex items-start gap-3 p-4 rounded-xl bg-gray-50/50 hover:bg-gray-50 border border-gray-100/50 hover:border-gray-200 transition-all duration-200"
+                  >
+                    <div className={`flex-shrink-0 w-10 h-10 rounded-lg flex items-center justify-center transition-all duration-200 ${
+                      activity.type === 'visit' 
+                        ? 'bg-blue-100 text-[#008cf7] group-hover:bg-[#008cf7] group-hover:text-white' 
+                        : 'bg-purple-100 text-purple-600 group-hover:bg-purple-600 group-hover:text-white'
+                    }`}>
+                      {activity.type === 'visit' ? (
+                        <Users className="h-5 w-5" />
+                      ) : (
+                        <MapPin className="h-5 w-5" />
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-start justify-between gap-2 mb-1">
+                        <p className="text-sm font-medium text-gray-900 leading-tight line-clamp-2">
+                          {activity.description}
+                        </p>
+                        <Badge 
+                          variant="outline" 
+                          className={`text-xs whitespace-nowrap flex-shrink-0 ${
+                            activity.type === 'visit' 
+                              ? 'bg-blue-50 text-[#008cf7] border-[#008cf7]/30' 
+                              : 'bg-purple-50 text-purple-600 border-purple-600/30'
+                          }`}
+                        >
+                          {activity.type}
+                        </Badge>
+                      </div>
+                      {activity.client && (
+                        <p className="text-xs text-gray-500 mb-1 truncate">
+                          <span className="font-medium">Client:</span> {activity.client}
+                        </p>
+                      )}
+                      <p className="text-xs text-gray-400 flex items-center gap-1">
+                        <Clock className="h-3 w-3" />
+                        {new Date(activity.timestamp).toLocaleDateString('en-US', { 
+                          month: 'short', 
+                          day: 'numeric', 
+                          year: 'numeric',
+                          hour: '2-digit',
+                          minute: '2-digit'
+                        })}
+                      </p>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </CardContent>
+        </Card>
       </div>
     </div>
   );

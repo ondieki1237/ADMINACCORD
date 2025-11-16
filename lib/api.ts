@@ -480,6 +480,54 @@ class ApiService {
   async getLeadHistory(leadId: string): Promise<any> {
     return this.makeRequest(`/admin/leads/${encodeURIComponent(leadId)}/history`);
   }
+
+  // Machines endpoints (admin)
+  async getMachines(page = 1, limit = 20, filters: Record<string, any> = {}): Promise<any> {
+    const params = new URLSearchParams({ 
+      page: String(page), 
+      limit: String(limit),
+      _t: String(Date.now())
+    });
+    Object.entries(filters).forEach(([k, v]) => {
+      if (v !== undefined && v !== null && v !== "") params.set(k, String(v));
+    });
+    return this.makeRequest(`/admin/machines?${params.toString()}`, {
+      headers: {
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Pragma': 'no-cache',
+        'Expires': '0'
+      }
+    });
+  }
+
+  async getMachineById(machineId: string): Promise<any> {
+    return this.makeRequest(`/admin/machines/${encodeURIComponent(machineId)}`);
+  }
+
+  async getMachineServices(machineId: string, page = 1, limit = 20): Promise<any> {
+    const params = new URLSearchParams({ page: String(page), limit: String(limit) });
+    return this.makeRequest(`/machines/${encodeURIComponent(machineId)}/services?${params.toString()}`);
+  }
+
+  async createMachine(payload: Record<string, any>): Promise<any> {
+    return this.makeRequest(`/admin/machines`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  }
+
+  async updateMachine(machineId: string, payload: Record<string, any>): Promise<any> {
+    return this.makeRequest(`/admin/machines/${encodeURIComponent(machineId)}`, {
+      method: "PUT",
+      body: JSON.stringify(payload),
+    });
+  }
+
+  async deleteMachine(machineId: string): Promise<any> {
+    return this.makeRequest(`/admin/machines/${encodeURIComponent(machineId)}`, {
+      method: "DELETE",
+    });
+  }
 }
 
 export const apiService = new ApiService()
