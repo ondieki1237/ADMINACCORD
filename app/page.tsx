@@ -28,6 +28,7 @@ const PlannersManager = dynamic(() => import("@/components/dashboard/planners"),
 const SalesHeatmap = dynamic(() => import("@/components/dashboard/sales-heatmap"), { ssr: false })
 const PerformanceAnalytics = dynamic(() => import("@/components/dashboard/performance-analytics"), { ssr: false })
 const EngineerReports = dynamic(() => import("@/components/dashboard/engineer-reports"), { ssr: false })
+const DailyReports = dynamic(() => import("@/components/dashboard/daily-reports"), { ssr: false })
 
 export default function HomePage() {
   const [isAuthenticated, setIsAuthenticated] = useState(false)
@@ -46,7 +47,7 @@ export default function HomePage() {
   }
 
   const handleSwipeLeft = () => {
-    const pages = ["dashboard", "visits", "trails", "follow-ups", "profile", "reports", "advanced-analytics", "leads", "machines", "user-manager", "planners", "sales-heatmap"]
+    const pages = ["dashboard", "visits", "trails", "follow-ups", "profile", "reports", "advanced-analytics", "leads", "machines", "user-manager", "planners", "sales-heatmap", "daily-reports", "performance-analytics", "engineer-reports"]
     const currentIndex = pages.indexOf(currentPage)
     if (currentIndex < pages.length - 1) {
       setCurrentPage(pages[currentIndex + 1])
@@ -54,7 +55,7 @@ export default function HomePage() {
   }
 
   const handleSwipeRight = () => {
-    const pages = ["dashboard", "visits", "trails", "follow-ups", "profile", "reports", "advanced-analytics", "leads", "machines", "user-manager", "planners", "sales-heatmap"]
+    const pages = ["dashboard", "visits", "trails", "follow-ups", "profile", "reports", "advanced-analytics", "leads", "machines", "user-manager", "planners", "sales-heatmap", "daily-reports", "performance-analytics", "engineer-reports"]
     const currentIndex = pages.indexOf(currentPage)
     if (currentIndex > 0) {
       setCurrentPage(pages[currentIndex - 1])
@@ -117,6 +118,8 @@ export default function HomePage() {
         return <PerformanceAnalytics />
       case "engineer-reports":
         return <EngineerReports />
+      case "daily-reports":
+        return <DailyReports />
       default:
         return <DashboardOverview />
     }
