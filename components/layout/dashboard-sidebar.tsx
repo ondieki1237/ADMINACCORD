@@ -85,13 +85,7 @@ export function DashboardSidebar({ currentPage = "dashboard", onPageChange }: Da
       color: "text-green-600",
       bgColor: "bg-green-50"
     },
-    { 
-      icon: FileText, 
-      label: "Sales Reports", 
-      path: "/dashboard/reports",
-      color: "text-orange-600",
-      bgColor: "bg-orange-50"
-    },
+    // Sales Reports removed per request
     { 
       icon: BarChart3, 
       label: "Analytics", 
