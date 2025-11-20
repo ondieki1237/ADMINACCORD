@@ -528,6 +528,19 @@ class ApiService {
       method: "DELETE",
     });
   }
+
+  // Trigger backend report for machines due in a range (admin)
+  async triggerMachinesDueReport(days = 5, recipients?: string[]): Promise<any> {
+    const params = new URLSearchParams();
+    params.set('days', String(days));
+    const body: any = {};
+    if (recipients && recipients.length > 0) body.recipients = recipients;
+
+    return this.makeRequest(`/admin/machines/reports/due?${params.toString()}`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    });
+  }
 }
 
 export const apiService = new ApiService()

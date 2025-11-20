@@ -1,6 +1,7 @@
 "use client"
 
 import React, { useEffect, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { apiService } from "@/lib/api";
 import { 
@@ -55,6 +56,7 @@ interface Engineer {
 type DutyType = 'installation' | 'maintenance' | 'service' | 'other';
 
 export default function EngineerReports() {
+  const qc = useQueryClient();
   // Services data
   const [services, setServices] = useState<Service[]>([]);
   const [page, setPage] = useState(1);
@@ -284,7 +286,7 @@ export default function EngineerReports() {
           status: "assigned"
         };
 
-        await fetch(`https://app.codewithseth.co.ke/api/engineering-services/${id}`, {
+        const res = await fetch(`https://app.codewithseth.co.ke/api/engineering-services/${id}`, {
           method: "PUT",
           headers: {
             "Content-Type": "application/json",
@@ -292,6 +294,21 @@ export default function EngineerReports() {
           },
           body: JSON.stringify(payload)
         });
+
+        // If update returned the updated service, attempt to invalidate machine-specific caches
+        if (res.ok) {
+          try {
+            const json = await res.json();
+            const updated = json?.data || json;
+            const machineId = updated?.machineId || updated?.machine?._id || updated?.machine?._id;
+            // Invalidate any cached machine services so machine history UI updates
+            if (machineId) {
+              qc.invalidateQueries({ queryKey: ["machine-services", machineId] })
+            }
+          } catch (e) {
+            // ignore parsing errors
+          }
+        }
       }
 
       // Reset and close modal
@@ -303,6 +320,14 @@ export default function EngineerReports() {
       
       // Refresh services
       fetchServices();
+
+      // Also invalidate general machines and machine-services caches so machine history reflects changes
+      try {
+        qc.invalidateQueries({ queryKey: ["machines"] })
+        qc.invalidateQueries({ queryKey: ["machine-services"] })
+      } catch (e) {
+        // noop
+      }
     } catch (err: any) {
       console.error("bulkAssign error:", err);
       setError(err?.message || "Failed to assign services");

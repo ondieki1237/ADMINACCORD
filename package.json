@@ -5,6 +5,7 @@
   "scripts": {
     "build": "next build",
     "dev": "next dev",
+    "notify-services": "node scripts/notifyUpcomingServices.js",
     "lint": "next lint",
     "start": "next start"
   },
@@ -81,6 +82,8 @@
     "vue": "latest",
     "vue-router": "latest",
     "zod": "3.25.67"
+    ,
+    "nodemailer": "^6.9.3"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.1.9",

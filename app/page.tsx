@@ -11,6 +11,7 @@ import { MobileOptimizations } from "@/components/mobile/mobile-optimizations"
 import { TouchGestures } from "@/components/mobile/touch-gestures"
 import { authService } from "@/lib/auth"
 import { Toaster } from "@/components/ui/toaster"
+import DesktopHeader from "@/components/layout/desktop-header"
 
 // Dynamic imports with SSR disabled to prevent window access during build
 const DashboardOverview = dynamic(() => import("@/components/dashboard/dashboard-overview").then(mod => ({ default: mod.DashboardOverview })), { ssr: false })
@@ -35,11 +36,19 @@ export default function HomePage() {
   const [showRegister, setShowRegister] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
   const [currentPage, setCurrentPage] = useState("dashboard")
+  const [isDesktop, setIsDesktop] = useState(false)
 
   useEffect(() => {
     // Check if user is already authenticated
     setIsAuthenticated(authService.isAuthenticated())
     setIsLoading(false)
+    // Detect desktop and optimize UI for larger screens
+    if (typeof window !== "undefined") {
+      const onResize = () => setIsDesktop(window.innerWidth >= 1024)
+      onResize()
+      window.addEventListener("resize", onResize)
+      return () => window.removeEventListener("resize", onResize)
+    }
   }, [])
 
   const handleAuthSuccess = () => {
@@ -127,14 +136,18 @@ export default function HomePage() {
 
   return (
     <div className="min-h-screen bg-background">
+      {/* Shared small helpers (kept for backward compatibility) */}
       <MobileOptimizations />
       <OfflineIndicator />
       <PWAInstall />
 
-      {/* Desktop Sidebar */}
+      {/* Desktop header shown on large screens to make the app feel desktop-first */}
+      {isDesktop && <DesktopHeader />}
+
+      {/* Desktop Sidebar (kept dynamic to avoid SSR/window issues) */}
       <DashboardSidebar currentPage={currentPage} onPageChange={setCurrentPage} />
 
-      {/* Mobile Navigation */}
+      {/* Mobile Navigation (it will hide on larger screens via its own styles) */}
       <MobileNav currentPage={currentPage} onPageChange={setCurrentPage} />
 
       <TouchGestures onSwipeLeft={handleSwipeLeft} onSwipeRight={handleSwipeRight}>

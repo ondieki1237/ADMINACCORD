@@ -28,6 +28,7 @@ import {
   CheckCircle2,
   XCircle,
   Settings,
+  Edit,
   ClipboardList,
   History,
   UserCog,
@@ -35,6 +36,43 @@ import {
 } from "lucide-react"
 
 export default function MachinesList() {
+  const [showDueOnly, setShowDueOnly] = useState(false)
+  const [dueDays, setDueDays] = useState<number>(5)
+
+  // Query for machines due in N days (prefers backend filtering)
+  const { data: dueData, isLoading: dueLoading, refetch: refetchDue } = useQuery({
+    queryKey: ["machines", "due", dueDays],
+    queryFn: async () => {
+      // compute start & end for the target day (local date)
+      const target = new Date()
+      target.setDate(target.getDate() + dueDays)
+      const start = new Date(target)
+      start.setHours(0,0,0,0)
+      const end = new Date(target)
+      end.setHours(23,59,59,999)
+
+      try {
+        // Use backend filtering if available (startDate/endDate)
+        const res = await apiService.getMachines(1, 1000, { startDate: start.toISOString(), endDate: end.toISOString() })
+        return res
+      } catch (err: any) {
+        console.warn('Failed to fetch due machines via backend, falling back to client filter', err)
+        // Fall back: return null and let UI handle client-side filtering from `machines`
+        return null
+      }
+    },
+    enabled: showDueOnly,
+    staleTime: 5 * 60 * 1000,
+  })
+
+  const parseDueMachines = () => {
+    if (!dueData) return []
+    if (dueData.success && dueData.data?.docs) return dueData.data.docs
+    if (dueData.success && Array.isArray(dueData.data)) return dueData.data
+    return []
+  }
+
+  const dueMachines = parseDueMachines()
   const [page, setPage] = useState(1)
   const [selectedMachine, setSelectedMachine] = useState<any | null>(null)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
@@ -42,6 +80,7 @@ export default function MachinesList() {
   const [isCreateServiceDialogOpen, setIsCreateServiceDialogOpen] = useState(false)
   const [isServiceHistoryDialogOpen, setIsServiceHistoryDialogOpen] = useState(false)
   const [isBulkAddDialogOpen, setIsBulkAddDialogOpen] = useState(false)
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState("")
   const [bulkMachinesText, setBulkMachinesText] = useState("")
   
@@ -308,6 +347,32 @@ export default function MachinesList() {
     })
   }
 
+  const openEditDialog = (machine: any) => {
+    if (!machine) return
+    setSelectedMachine(machine)
+    // Populate formData with selected machine values
+    setFormData({
+      serialNumber: machine.serialNumber || "",
+      model: machine.model || "",
+      manufacturer: machine.manufacturer || "",
+      version: machine.version || "",
+      facilityName: machine.facility?.name || "",
+      facilityLevel: machine.facility?.level || "",
+      facilityLocation: machine.facility?.location || "",
+      contactPersonName: machine.contactPerson?.name || "",
+      contactPersonRole: machine.contactPerson?.role || "",
+      contactPersonPhone: machine.contactPerson?.phone || "",
+      contactPersonEmail: machine.contactPerson?.email || "",
+      installedDate: machine.installedDate ? new Date(machine.installedDate).toISOString().slice(0,10) : "",
+      purchaseDate: machine.purchaseDate ? new Date(machine.purchaseDate).toISOString().slice(0,10) : "",
+      warrantyExpiry: machine.warrantyExpiry ? new Date(machine.warrantyExpiry).toISOString().slice(0,10) : "",
+      lastServicedAt: machine.lastServicedAt ? new Date(machine.lastServicedAt).toISOString().slice(0,10) : "",
+      nextServiceDue: machine.nextServiceDue ? new Date(machine.nextServiceDue).toISOString().slice(0,10) : "",
+      status: machine.status || "active"
+    })
+    setIsEditDialogOpen(true)
+  }
+
   const resetServiceForm = () => {
     setServiceFormData({
       serviceType: "maintenance",
@@ -527,6 +592,50 @@ export default function MachinesList() {
             </div>
 
             <div className="flex items-center gap-2">
+              {/* Due for service controls */}
+              <div className="flex items-center gap-2">
+                <select
+                  className="text-sm border rounded px-2 py-1"
+                  value={dueDays}
+                  onChange={(e) => setDueDays(Number(e.target.value))}
+                >
+                  <option value={5}>Next 5 days</option>
+                  <option value={7}>Next 7 days</option>
+                  <option value={30}>Next 30 days</option>
+                  <option value={-1}>Overdue</option>
+                </select>
+                <Button
+                  size="sm"
+                  variant={showDueOnly ? "default" : "outline"}
+                  onClick={() => {
+                    setShowDueOnly(!showDueOnly)
+                    if (!showDueOnly) refetchDue()
+                  }}
+                >
+                  <AlertCircle className="h-4 w-4 mr-2" />
+                  Due for service
+                  <span className="ml-2 px-2 py-0.5 text-xs bg-gray-100 rounded">{showDueOnly ? dueMachines.length : machines.filter((m:any)=>m.nextServiceDue && new Date(m.nextServiceDue) < new Date()).length}</span>
+                </Button>
+                {isAdmin && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={async () => {
+                      try {
+                        const daysParam = dueDays === -1 ? 0 : dueDays
+                        await apiService.triggerMachinesDueReport(daysParam)
+                        toast({ title: 'Report requested', description: 'Backend will send the due machines report' })
+                      } catch (err: any) {
+                        console.error('Send report error:', err)
+                        toast({ title: 'Failed to request report', description: err.message || String(err), variant: 'destructive' })
+                      }
+                    }}
+                    className="border-indigo-300 text-indigo-700 hover:bg-indigo-50"
+                  >
+                    Send report
+                  </Button>
+                )}
+              </div>
               <Button 
                 onClick={async () => {
                   await qc.invalidateQueries({ queryKey: ["machines"] })
@@ -644,13 +753,13 @@ export default function MachinesList() {
             </CardDescription>
           </CardHeader>
           <CardContent className="pt-6">
-            {isLoading ? (
+                {isLoading || (showDueOnly && dueLoading) ? (
               <div className="animate-pulse grid gap-3">
                 {[...Array(6)].map((_, i) => (
                   <div key={i} className="h-24 bg-gray-100 rounded-lg" />
                 ))}
               </div>
-            ) : error ? (
+                ) : error ? (
               <div className="text-center py-12">
                 <XCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
                 <p className="text-gray-900 font-semibold mb-2">Failed to load machines</p>
@@ -671,7 +780,7 @@ export default function MachinesList() {
               </div>
             ) : (
               <div className="space-y-3">
-                {machines.map((machine: any) => (
+                {(showDueOnly ? dueMachines : machines).map((machine: any) => (
                   <div 
                     key={machine.id || machine._id} 
                     className="flex items-start justify-between p-5 rounded-xl border border-gray-200 hover:border-[#008cf7]/50 hover:shadow-md transition-all duration-200 bg-white"
@@ -980,6 +1089,19 @@ export default function MachinesList() {
                 <ClipboardList className="h-4 w-4 mr-2" />
                 Create Service
               </Button>
+              {isAdmin && (
+                <Button
+                  onClick={() => {
+                    openEditDialog(selectedMachine)
+                    setIsDialogOpen(false)
+                  }}
+                  variant="outline"
+                  className="w-full sm:w-auto"
+                >
+                  <Edit className="h-4 w-4 mr-2" />
+                  Edit Machine
+                </Button>
+              )}
               <Button variant="outline" onClick={() => setIsDialogOpen(false)} className="w-full sm:w-auto">
                 Close
               </Button>
@@ -1185,17 +1307,212 @@ export default function MachinesList() {
           </DialogContent>
         </Dialog>
 
+        {/* Edit Machine Dialog */}
+        <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+          <DialogContent className="sm:max-w-[700px] max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Edit className="h-5 w-5 text-[#008cf7]" />
+                Edit Machine
+              </DialogTitle>
+            </DialogHeader>
+
+            <div className="space-y-6 py-4">
+              {/* Basic Info */}
+              <div className="space-y-4">
+                <h4 className="font-semibold text-gray-900">Basic Information</h4>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label>Model *</Label>
+                    <Input
+                      value={formData.model}
+                      onChange={(e) => setFormData({ ...formData, model: e.target.value })}
+                      placeholder="e.g., XRay 5000"
+                    />
+                  </div>
+                  <div>
+                    <Label>Manufacturer *</Label>
+                    <Input
+                      value={formData.manufacturer}
+                      onChange={(e) => setFormData({ ...formData, manufacturer: e.target.value })}
+                      placeholder="e.g., Acme Medical"
+                    />
+                  </div>
+                  <div>
+                    <Label>Serial Number</Label>
+                    <Input
+                      value={formData.serialNumber}
+                      onChange={(e) => setFormData({ ...formData, serialNumber: e.target.value })}
+                      placeholder="SN-12345"
+                    />
+                  </div>
+                  <div>
+                    <Label>Version</Label>
+                    <Input
+                      value={formData.version}
+                      onChange={(e) => setFormData({ ...formData, version: e.target.value })}
+                      placeholder="v2.0"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Dates & Service (editable including Next Service Due) */}
+              <div className="space-y-4">
+                <h4 className="font-semibold text-gray-900">Dates & Service</h4>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label>Installed Date</Label>
+                    <Input
+                      type="date"
+                      value={formData.installedDate}
+                      onChange={(e) => setFormData({ ...formData, installedDate: e.target.value })}
+                    />
+                  </div>
+                  <div>
+                    <Label>Purchase Date</Label>
+                    <Input
+                      type="date"
+                      value={formData.purchaseDate}
+                      onChange={(e) => setFormData({ ...formData, purchaseDate: e.target.value })}
+                    />
+                  </div>
+                  <div>
+                    <Label>Warranty Expiry</Label>
+                    <Input
+                      type="date"
+                      value={formData.warrantyExpiry}
+                      onChange={(e) => setFormData({ ...formData, warrantyExpiry: e.target.value })}
+                    />
+                  </div>
+                  <div>
+                    <Label>Last Serviced</Label>
+                    <Input
+                      type="date"
+                      value={formData.lastServicedAt}
+                      onChange={(e) => setFormData({ ...formData, lastServicedAt: e.target.value })}
+                    />
+                  </div>
+                  <div>
+                    <Label>Next Service Due</Label>
+                    <Input
+                      type="date"
+                      value={formData.nextServiceDue}
+                      onChange={(e) => setFormData({ ...formData, nextServiceDue: e.target.value })}
+                    />
+                  </div>
+                  <div>
+                    <Label>Status</Label>
+                    <select
+                      className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
+                      value={formData.status}
+                      onChange={(e) => setFormData({ ...formData, status: e.target.value })}
+                    >
+                      <option value="active">Active</option>
+                      <option value="inactive">Inactive</option>
+                      <option value="maintenance">Maintenance</option>
+                      <option value="decommissioned">Decommissioned</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              {/* Contact Person */}
+              <div className="space-y-4">
+                <h4 className="font-semibold text-gray-900">Contact Person</h4>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label>Name</Label>
+                    <Input
+                      value={formData.contactPersonName}
+                      onChange={(e) => setFormData({ ...formData, contactPersonName: e.target.value })}
+                      placeholder="Dr. Jane Doe"
+                    />
+                  </div>
+                  <div>
+                    <Label>Role</Label>
+                    <Input
+                      value={formData.contactPersonRole}
+                      onChange={(e) => setFormData({ ...formData, contactPersonRole: e.target.value })}
+                      placeholder="Radiologist"
+                    />
+                  </div>
+                  <div>
+                    <Label>Phone</Label>
+                    <Input
+                      value={formData.contactPersonPhone}
+                      onChange={(e) => setFormData({ ...formData, contactPersonPhone: e.target.value })}
+                      placeholder="+254712345678"
+                    />
+                  </div>
+                  <div>
+                    <Label>Email</Label>
+                    <Input
+                      type="email"
+                      value={formData.contactPersonEmail}
+                      onChange={(e) => setFormData({ ...formData, contactPersonEmail: e.target.value })}
+                      placeholder="jane@hospital.co.ke"
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setIsEditDialogOpen(false)}>
+                Cancel
+              </Button>
+              <Button
+                onClick={() => {
+                  if (!selectedMachine) return
+                  const id = selectedMachine.id || selectedMachine._id
+                  const payload: any = {
+                    serialNumber: formData.serialNumber,
+                    model: formData.model,
+                    manufacturer: formData.manufacturer,
+                    version: formData.version,
+                    facility: {
+                      name: formData.facilityName,
+                      level: formData.facilityLevel,
+                      location: formData.facilityLocation
+                    },
+                    contactPerson: {
+                      name: formData.contactPersonName,
+                      role: formData.contactPersonRole,
+                      phone: formData.contactPersonPhone,
+                      email: formData.contactPersonEmail
+                    },
+                    status: formData.status
+                  }
+
+                  if (formData.installedDate) payload.installedDate = formData.installedDate
+                  if (formData.purchaseDate) payload.purchaseDate = formData.purchaseDate
+                  if (formData.warrantyExpiry) payload.warrantyExpiry = formData.warrantyExpiry
+                  if (formData.lastServicedAt) payload.lastServicedAt = formData.lastServicedAt
+                  if (formData.nextServiceDue) payload.nextServiceDue = formData.nextServiceDue
+
+                  updateMachineMutation.mutate({ id, payload })
+                }}
+                disabled={!formData.model.trim() || !formData.manufacturer.trim()}
+                className="bg-[#008cf7] hover:bg-[#0066cc] text-white"
+              >
+                Save Changes
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
         {/* Service History Dialog */}
         <Dialog open={isServiceHistoryDialogOpen} onOpenChange={setIsServiceHistoryDialogOpen}>
-          <DialogContent className="sm:max-w-[700px] max-h-[90vh] overflow-y-auto">
+          <DialogContent aria-describedby="service-dialog-desc" className="sm:max-w-[700px] max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
                 <History className="h-5 w-5 text-[#008cf7]" />
                 Service History: {selectedMachine?.model || "Machine"}
               </DialogTitle>
-              <p className="text-sm text-gray-600">
-                {selectedMachine?.manufacturer} - S/N: {selectedMachine?.serialNumber}
-              </p>
+                <p id="service-dialog-desc" className="text-sm text-gray-600">
+                  {selectedMachine?.manufacturer} - S/N: {selectedMachine?.serialNumber}
+                </p>
             </DialogHeader>
 
             <div className="py-4">
@@ -1205,9 +1522,9 @@ export default function MachinesList() {
                 </div>
               ) : (
                 <div className="space-y-4">
-                  {serviceHistoryData && serviceHistoryData.length > 0 ? (
+                  {services && services.length > 0 ? (
                     <div className="space-y-3">
-                      {serviceHistoryData.map((service: any, idx: number) => {
+                      {services.map((service: any, idx: number) => {
                         const serviceTypeColor = 
                           service.serviceType === "installation" ? "bg-blue-100 text-blue-800" :
                           service.serviceType === "repair" ? "bg-red-100 text-red-800" :
