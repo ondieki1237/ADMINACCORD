@@ -42,7 +42,11 @@ interface DashboardData {
   heatmap?: { [key: string]: number };
 }
 
-export function DashboardOverview() {
+interface DashboardOverviewProps {
+  onPageChange?: (page: string) => void;
+}
+
+export function DashboardOverview({ onPageChange }: DashboardOverviewProps = { onPageChange: undefined }) {
   const [dateRange, setDateRange] = useState<{ startDate: string; endDate: string }>({
     startDate: format(new Date(new Date().getFullYear(), new Date().getMonth(), 1), "yyyy-MM-dd"),
     endDate: format(new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0), "yyyy-MM-dd"),
@@ -73,7 +77,7 @@ export function DashboardOverview() {
   useEffect(() => {
     const fetchVisits = async () => {
       if (typeof window === 'undefined') return;
-      
+
       try {
         const token = localStorage.getItem("accessToken")
         const res = await fetch("https://app.codewithseth.co.ke/api/visits", {
@@ -91,14 +95,14 @@ export function DashboardOverview() {
         let count = 0
         docs.forEach((visit: any) => {
 
-            const start = new Date(visit.startTime)
-            const end = new Date(visit.endTime)
-            const diff = (end.getTime() - start.getTime()) / (1000 * 60)
-            if (!isNaN(diff) && diff > 0) {
-              totalMinutes += diff
-              count++
-            }
+          const start = new Date(visit.startTime)
+          const end = new Date(visit.endTime)
+          const diff = (end.getTime() - start.getTime()) / (1000 * 60)
+          if (!isNaN(diff) && diff > 0) {
+            totalMinutes += diff
+            count++
           }
+        }
         )
         setAverageDuration(count > 0 ? Math.round(totalMinutes / count) : 0)
       } catch (err) {
@@ -113,7 +117,7 @@ export function DashboardOverview() {
   useEffect(() => {
     const fetchLeads = async () => {
       if (typeof window === 'undefined') return;
-      
+
       setLeadsLoading(true)
       try {
         const token = localStorage.getItem("accessToken")
@@ -124,7 +128,7 @@ export function DashboardOverview() {
           }
         })
         const data = await res.json()
-        
+
         // Handle different API response formats
         let totalCount = 0
         if (data?.data?.totalDocs) {
@@ -137,7 +141,7 @@ export function DashboardOverview() {
           const docs = data?.data?.docs || data?.docs || data?.data || []
           totalCount = Array.isArray(docs) ? docs.length : 0
         }
-        
+
         setTotalLeads(totalCount)
       } catch (err) {
         console.error("Failed to fetch leads:", err)
@@ -154,7 +158,7 @@ export function DashboardOverview() {
     queryKey: ["dashboard", dateRange, currentUser?.region, currentUser?.id],
     queryFn: async () => {
       if (typeof window === 'undefined') return null;
-      
+
       try {
         const token = localStorage.getItem("accessToken");
         const [overview, recentActivity, performance, visitsRes] = await Promise.all([
@@ -209,7 +213,7 @@ export function DashboardOverview() {
     queryKey: ["performance", dateRange, currentUser?.region],
     queryFn: async () => {
       if (typeof window === 'undefined') return [];
-      
+
       const token = localStorage.getItem("accessToken");
       const region = currentUser?.region || "North";
       const url = `https://app.codewithseth.co.ke/api/dashboard/performance?startDate=${dateRange.startDate}&endDate=${dateRange.endDate}&region=${region}`;
@@ -248,7 +252,7 @@ export function DashboardOverview() {
     queryKey: ["allLeads"],
     queryFn: async () => {
       if (typeof window === 'undefined') return [];
-      
+
       const token = localStorage.getItem("accessToken");
       const res = await fetch("https://app.codewithseth.co.ke/api/admin/leads?page=1&limit=1000", {
         headers: {
@@ -317,12 +321,12 @@ export function DashboardOverview() {
   };
 
   // Sales Heatmap chart data - sort by timestamp (oldest to latest)
-  const sortedSalesHeatmap = salesHeatmap 
+  const sortedSalesHeatmap = salesHeatmap
     ? [...salesHeatmap].sort((a: any, b: any) => {
-        const dateA = new Date(a.timestamp || a.date || a.createdAt || 0).getTime();
-        const dateB = new Date(b.timestamp || b.date || b.createdAt || 0).getTime();
-        return dateA - dateB; // Oldest to latest
-      })
+      const dateA = new Date(a.timestamp || a.date || a.createdAt || 0).getTime();
+      const dateB = new Date(b.timestamp || b.date || b.createdAt || 0).getTime();
+      return dateA - dateB; // Oldest to latest
+    })
     : [];
 
   const salesHeatmapChartData = {
@@ -351,7 +355,7 @@ export function DashboardOverview() {
   // Download Functions
   const downloadDashboardData = async (format: 'csv' | 'json' | 'excel') => {
     if (typeof window === 'undefined') return;
-    
+
     try {
       const dashboardData = {
         summary: {
@@ -383,7 +387,7 @@ export function DashboardOverview() {
         link.click();
         document.body.removeChild(link);
         window.URL.revokeObjectURL(url);
-        
+
         toast({
           title: "Download Started",
           description: "Dashboard data exported as JSON",
@@ -391,21 +395,21 @@ export function DashboardOverview() {
       } else if (format === 'csv') {
         // Download as CSV
         const csvRows = [];
-        
+
         // Summary section
         csvRows.push('Dashboard Summary Report');
         csvRows.push(`Generated: ${new Date().toLocaleString()}`);
         csvRows.push(`User: ${currentUser?.firstName} ${currentUser?.lastName} (${currentUser?.role})`);
         csvRows.push(`Region: ${currentUser?.region}`);
         csvRows.push('');
-        
+
         // Metrics
         csvRows.push('Metric,Value');
         csvRows.push(`Total Visits,${totalVisits}`);
         csvRows.push(`Total Leads,${totalLeads}`);
         csvRows.push(`Average Visit Duration (min),${averageDuration}`);
         csvRows.push('');
-        
+
         // Visits data
         csvRows.push('Visits');
         csvRows.push('Date,Client,Location,Duration,Status');
@@ -413,7 +417,7 @@ export function DashboardOverview() {
           csvRows.push(`${visit.date},${visit.client?.name || 'N/A'},${visit.client?.location || 'N/A'},${visit.duration || 'N/A'},${visit.status || 'N/A'}`);
         });
         csvRows.push('');
-        
+
         // Leads data
         csvRows.push('Leads');
         csvRows.push('Date,Name,Company,Status,Value');
@@ -421,7 +425,7 @@ export function DashboardOverview() {
           const date = lead.createdAt || lead.date || 'N/A';
           csvRows.push(`${date},${lead.name || 'N/A'},${lead.company || 'N/A'},${lead.status || 'N/A'},${lead.value || 0}`);
         });
-        
+
         const csvContent = csvRows.join('\n');
         const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
         const url = window.URL.createObjectURL(blob);
@@ -432,7 +436,7 @@ export function DashboardOverview() {
         link.click();
         document.body.removeChild(link);
         window.URL.revokeObjectURL(url);
-        
+
         toast({
           title: "Download Started",
           description: "Dashboard data exported as CSV",
@@ -446,11 +450,11 @@ export function DashboardOverview() {
               'Authorization': `Bearer ${token}`,
             },
           });
-          
+
           if (!response.ok) {
             throw new Error('Excel report not available. Generate analytics first.');
           }
-          
+
           const blob = await response.blob();
           const url = window.URL.createObjectURL(blob);
           const link = document.createElement('a');
@@ -460,7 +464,7 @@ export function DashboardOverview() {
           link.click();
           document.body.removeChild(link);
           window.URL.revokeObjectURL(url);
-          
+
           toast({
             title: "Download Started",
             description: "Excel analytics report downloaded",
@@ -489,7 +493,7 @@ export function DashboardOverview() {
   // Refresh handler
   const handleRefresh = async () => {
     if (typeof window === 'undefined') return;
-    
+
     setIsRefreshing(true);
     try {
       await refetch();
@@ -512,7 +516,7 @@ export function DashboardOverview() {
         totalCount = Array.isArray(docs) ? docs.length : 0;
       }
       setTotalLeads(totalCount);
-      
+
       toast({
         title: "Dashboard Refreshed",
         description: "All data has been updated successfully",
@@ -664,7 +668,7 @@ export function DashboardOverview() {
                   <RefreshCw className={`h-4 w-4 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
                   Refresh
                 </Button>
-                
+
                 {/* Enhanced Download Dropdown */}
                 <div className="relative">
                   <Button
@@ -676,11 +680,11 @@ export function DashboardOverview() {
                     <Download className="h-4 w-4 mr-2" />
                     Export
                   </Button>
-                  
+
                   {showDownloadMenu && (
                     <>
-                      <div 
-                        className="fixed inset-0 z-40" 
+                      <div
+                        className="fixed inset-0 z-40"
                         onClick={() => setShowDownloadMenu(false)}
                       />
                       <div className="absolute right-0 mt-2 w-56 bg-white rounded-xl shadow-2xl border border-gray-100 z-50 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
@@ -755,55 +759,75 @@ export function DashboardOverview() {
 
         {/* Stats Cards Row - Enhanced Modern Cards with Animations */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-          {/* Total Visits Card */}
-          <Card className="bg-white hover:shadow-xl transition-all duration-300 border border-gray-100 overflow-hidden group">
-            <CardContent className="p-5 sm:p-6">
-              <div className="flex items-center justify-between mb-4">
-                <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl bg-gradient-to-br from-blue-100 to-blue-50 flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
-                  <MapPin className="h-5 w-5 sm:h-6 sm:w-6 text-[#008cf7]" />
-                </div>
-                <span className="text-xs font-semibold text-green-600 bg-green-50 px-2.5 py-1 rounded-full border border-green-200">
-                  Active
-                </span>
-              </div>
-              <div>
-                <p className="text-xs sm:text-sm font-medium text-gray-500 mb-1.5 uppercase tracking-wide">Total Visits</p>
-                <p className="text-3xl sm:text-4xl font-bold text-gray-900 mb-1">{totalVisits.toLocaleString()}</p>
-                <p className="text-xs text-gray-400 flex items-center gap-1">
-                  <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse"></span>
-                  This period
-                </p>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Total Leads Card */}
-          <Card className="bg-white hover:shadow-xl transition-all duration-300 border border-gray-100 overflow-hidden group">
-            <CardContent className="p-5 sm:p-6">
-              <div className="flex items-center justify-between mb-4">
-                <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl bg-gradient-to-br from-purple-100 to-purple-50 flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
-                  <UserPlus className="h-5 w-5 sm:h-6 sm:w-6 text-purple-600" />
-                </div>
-                <span className="text-xs font-semibold text-purple-600 bg-purple-50 px-2.5 py-1 rounded-full border border-purple-200">
-                  Prospects
-                </span>
-              </div>
-              <div>
-                <p className="text-xs sm:text-sm font-medium text-gray-500 mb-1.5 uppercase tracking-wide">Total Leads</p>
-                {leadsLoading ? (
-                  <div className="flex items-center gap-2 mb-1">
-                    <div className="h-10 w-24 bg-purple-100 animate-pulse rounded"></div>
+          {/* Total Visits Card - Clickable */}
+          <button
+            onClick={() => {
+              // Navigate to daily reports page
+              if (onPageChange) {
+                onPageChange('daily-reports');
+              }
+            }}
+            className="text-left w-full"
+          >
+            <Card className="bg-white hover:shadow-xl transition-all duration-300 border border-gray-100 overflow-hidden group cursor-pointer hover:border-blue-300">
+              <CardContent className="p-5 sm:p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl bg-gradient-to-br from-blue-100 to-blue-50 flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
+                    <MapPin className="h-5 w-5 sm:h-6 sm:w-6 text-[#008cf7]" />
                   </div>
-                ) : (
-                  <p className="text-3xl sm:text-4xl font-bold text-gray-900 mb-1">{totalLeads.toLocaleString()}</p>
-                )}
-                <p className="text-xs text-gray-400 flex items-center gap-1">
-                  <span className="w-1.5 h-1.5 rounded-full bg-purple-500"></span>
-                  Pipeline opportunities
-                </p>
-              </div>
-            </CardContent>
-          </Card>
+                  <span className="text-xs font-semibold text-green-600 bg-green-50 px-2.5 py-1 rounded-full border border-green-200">
+                    Active
+                  </span>
+                </div>
+                <div>
+                  <p className="text-xs sm:text-sm font-medium text-gray-500 mb-1.5 uppercase tracking-wide">Total Visits</p>
+                  <p className="text-3xl sm:text-4xl font-bold text-gray-900 mb-1">{totalVisits.toLocaleString()}</p>
+                  <p className="text-xs text-gray-400 flex items-center gap-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse"></span>
+                    Click to view reports
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          </button>
+
+          {/* Total Leads Card - Clickable */}
+          <button
+            onClick={() => {
+              // Navigate to leads page
+              if (onPageChange) {
+                onPageChange('leads');
+              }
+            }}
+            className="text-left w-full"
+          >
+            <Card className="bg-white hover:shadow-xl transition-all duration-300 border border-gray-100 overflow-hidden group cursor-pointer hover:border-purple-300">
+              <CardContent className="p-5 sm:p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl bg-gradient-to-br from-purple-100 to-purple-50 flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
+                    <UserPlus className="h-5 w-5 sm:h-6 sm:w-6 text-purple-600" />
+                  </div>
+                  <span className="text-xs font-semibold text-purple-600 bg-purple-50 px-2.5 py-1 rounded-full border border-purple-200">
+                    Prospects
+                  </span>
+                </div>
+                <div>
+                  <p className="text-xs sm:text-sm font-medium text-gray-500 mb-1.5 uppercase tracking-wide">Total Leads</p>
+                  {leadsLoading ? (
+                    <div className="flex items-center gap-2 mb-1">
+                      <div className="h-10 w-24 bg-purple-100 animate-pulse rounded"></div>
+                    </div>
+                  ) : (
+                    <p className="text-3xl sm:text-4xl font-bold text-gray-900 mb-1">{totalLeads.toLocaleString()}</p>
+                  )}
+                  <p className="text-xs text-gray-400 flex items-center gap-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-purple-500"></span>
+                    Click to view leads
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          </button>
 
           {/* Visit Duration Card */}
           <Card className="bg-white hover:shadow-xl transition-all duration-300 border border-gray-100 overflow-hidden group">
@@ -889,8 +913,8 @@ export function DashboardOverview() {
                     responsive: true,
                     maintainAspectRatio: false,
                     plugins: {
-                      legend: { 
-                        display: true, 
+                      legend: {
+                        display: true,
                         position: "top",
                         labels: {
                           usePointStyle: true,
@@ -899,8 +923,8 @@ export function DashboardOverview() {
                           color: '#374151'
                         }
                       },
-                      tooltip: { 
-                        mode: "index", 
+                      tooltip: {
+                        mode: "index",
                         intersect: false,
                         backgroundColor: 'rgba(0, 0, 0, 0.85)',
                         padding: 14,
@@ -911,16 +935,16 @@ export function DashboardOverview() {
                     },
                     interaction: { mode: "nearest", axis: "x", intersect: false },
                     scales: {
-                      x: { 
+                      x: {
                         grid: { display: false },
-                        ticks: { 
+                        ticks: {
                           font: { size: 11 },
                           color: '#6b7280'
                         }
                       },
-                      y: { 
+                      y: {
                         beginAtZero: true,
-                        ticks: { 
+                        ticks: {
                           font: { size: 11 },
                           color: '#6b7280'
                         },
@@ -974,18 +998,18 @@ export function DashboardOverview() {
                         }
                       },
                       scales: {
-                        x: { 
+                        x: {
                           grid: { display: false },
-                          ticks: { 
+                          ticks: {
                             font: { size: 9 },
                             maxRotation: 45,
                             minRotation: 45,
                             color: '#6b7280'
                           }
                         },
-                        y: { 
+                        y: {
                           beginAtZero: true,
-                          ticks: { 
+                          ticks: {
                             font: { size: 11 },
                             color: '#6b7280'
                           },
@@ -1032,15 +1056,14 @@ export function DashboardOverview() {
                 </div>
               ) : (
                 transformedActivity.map((activity, index) => (
-                  <div 
-                    key={activity.id} 
+                  <div
+                    key={activity.id}
                     className="group flex items-start gap-3 p-4 rounded-xl bg-gray-50/50 hover:bg-gray-50 border border-gray-100/50 hover:border-gray-200 transition-all duration-200"
                   >
-                    <div className={`flex-shrink-0 w-10 h-10 rounded-lg flex items-center justify-center transition-all duration-200 ${
-                      activity.type === 'visit' 
-                        ? 'bg-blue-100 text-[#008cf7] group-hover:bg-[#008cf7] group-hover:text-white' 
-                        : 'bg-purple-100 text-purple-600 group-hover:bg-purple-600 group-hover:text-white'
-                    }`}>
+                    <div className={`flex-shrink-0 w-10 h-10 rounded-lg flex items-center justify-center transition-all duration-200 ${activity.type === 'visit'
+                      ? 'bg-blue-100 text-[#008cf7] group-hover:bg-[#008cf7] group-hover:text-white'
+                      : 'bg-purple-100 text-purple-600 group-hover:bg-purple-600 group-hover:text-white'
+                      }`}>
                       {activity.type === 'visit' ? (
                         <Users className="h-5 w-5" />
                       ) : (
@@ -1052,13 +1075,12 @@ export function DashboardOverview() {
                         <p className="text-sm font-medium text-gray-900 leading-tight line-clamp-2">
                           {activity.description}
                         </p>
-                        <Badge 
-                          variant="outline" 
-                          className={`text-xs whitespace-nowrap flex-shrink-0 ${
-                            activity.type === 'visit' 
-                              ? 'bg-blue-50 text-[#008cf7] border-[#008cf7]/30' 
-                              : 'bg-purple-50 text-purple-600 border-purple-600/30'
-                          }`}
+                        <Badge
+                          variant="outline"
+                          className={`text-xs whitespace-nowrap flex-shrink-0 ${activity.type === 'visit'
+                            ? 'bg-blue-50 text-[#008cf7] border-[#008cf7]/30'
+                            : 'bg-purple-50 text-purple-600 border-purple-600/30'
+                            }`}
                         >
                           {activity.type}
                         </Badge>
@@ -1070,9 +1092,9 @@ export function DashboardOverview() {
                       )}
                       <p className="text-xs text-gray-400 flex items-center gap-1">
                         <Clock className="h-3 w-3" />
-                        {new Date(activity.timestamp).toLocaleDateString('en-US', { 
-                          month: 'short', 
-                          day: 'numeric', 
+                        {new Date(activity.timestamp).toLocaleDateString('en-US', {
+                          month: 'short',
+                          day: 'numeric',
                           year: 'numeric',
                           hour: '2-digit',
                           minute: '2-digit'

@@ -91,7 +91,7 @@ export default function HomePage() {
   const renderCurrentPage = () => {
     switch (currentPage) {
       case "dashboard":
-        return <DashboardOverview />
+        return <DashboardOverview onPageChange={setCurrentPage} />
       case "visits":
         return <VisitManagement />
       case "trails":
