@@ -3,14 +3,14 @@
 import React, { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { apiService } from "@/lib/api";
-import { 
-  Wrench, 
-  Plus, 
-  Search, 
-  Filter, 
-  Calendar, 
-  User, 
-  MapPin, 
+import {
+  Wrench,
+  Plus,
+  Search,
+  Filter,
+  Calendar,
+  User,
+  MapPin,
   FileText,
   Clock,
   CheckCircle,
@@ -19,7 +19,8 @@ import {
   Download,
   Edit,
   Trash2,
-  Eye
+  Eye,
+  DollarSign
 } from "lucide-react";
 
 interface Service {
@@ -54,14 +55,18 @@ interface Engineer {
 
 type DutyType = 'installation' | 'maintenance' | 'service' | 'other';
 
-export default function EngineerReports() {
+interface EngineerReportsProps {
+  onPageChange?: (page: string) => void;
+}
+
+export default function EngineerReports({ onPageChange }: EngineerReportsProps = {}) {
   // Services data
   const [services, setServices] = useState<Service[]>([]);
   const [page, setPage] = useState(1);
   const [limit] = useState(20);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  
+
   // Filters
   const [serviceType, setServiceType] = useState<string>("");
   const [facilityName, setFacilityName] = useState<string>("");
@@ -151,8 +156,9 @@ export default function EngineerReports() {
         if (!res.ok) return;
         const json = await res.json();
         if (json?.success && Array.isArray(json.data)) {
-          // Get all users, not just engineers - admin can assign to anyone
-          setEngineers(json.data);
+          // Filter only engineers
+          const engineerUsers = json.data.filter((u: any) => u.role === 'engineer');
+          setEngineers(engineerUsers);
         }
       } catch (err) {
         console.error("Failed to fetch users:", err);
@@ -199,7 +205,7 @@ export default function EngineerReports() {
     try {
       const token = localStorage.getItem("accessToken");
       const engineer = engineers.find(e => e._id === dutyEngineer);
-      
+
       const payload = {
         date: dutyScheduledDate || new Date().toISOString(),
         facility: {
@@ -242,7 +248,7 @@ export default function EngineerReports() {
       setDutyScheduledDate("");
       setDutyDescription("");
       setDutyMachineDetails("");
-      
+
       // Refresh services list
       fetchServices();
     } catch (err: any) {
@@ -300,7 +306,7 @@ export default function EngineerReports() {
       setAssignScheduledDate("");
       setAssignNotes("");
       setSelectedIds({});
-      
+
       // Refresh services
       fetchServices();
     } catch (err: any) {
@@ -374,13 +380,26 @@ export default function EngineerReports() {
               <p className="text-gray-500">Manage engineer assignments and service requests</p>
             </div>
           </div>
-          <Button
-            onClick={() => setShowCreateDuty(true)}
-            className="bg-[#008cf7] hover:bg-[#006bb8] text-white flex items-center space-x-2 shadow-md"
-          >
-            <Plus className="h-5 w-5" />
-            <span>Create Duty</span>
-          </Button>
+          <div className="flex space-x-3">
+            <Button
+              onClick={() => {
+                if (onPageChange) {
+                  onPageChange('engineer-finance');
+                }
+              }}
+              className="bg-emerald-600 hover:bg-emerald-700 text-white flex items-center space-x-2 shadow-md"
+            >
+              <DollarSign className="h-5 w-5" />
+              <span>Finance</span>
+            </Button>
+            <Button
+              onClick={() => setShowCreateDuty(true)}
+              className="bg-[#008cf7] hover:bg-[#006bb8] text-white flex items-center space-x-2 shadow-md"
+            >
+              <Plus className="h-5 w-5" />
+              <span>Create Duty</span>
+            </Button>
+          </div>
         </div>
       </div>
 
@@ -702,7 +721,7 @@ export default function EngineerReports() {
 
       {/* Create Duty Modal */}
       {showCreateDuty && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 backdrop-blur-sm bg-black/30 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
             <div className="sticky top-0 bg-gradient-to-r from-[#008cf7] to-[#006bb8] text-white p-6 rounded-t-2xl">
               <div className="flex items-center justify-between">
@@ -852,7 +871,7 @@ export default function EngineerReports() {
 
       {/* Assign Modal */}
       {showAssignModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 backdrop-blur-sm bg-black/30 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full">
             <div className="bg-gradient-to-r from-[#008cf7] to-[#006bb8] text-white p-6 rounded-t-2xl">
               <div className="flex items-center justify-between">
@@ -943,7 +962,7 @@ export default function EngineerReports() {
 
       {/* Engineer Picker Modal */}
       {showEngineerPicker && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 backdrop-blur-sm bg-black/30 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-hidden flex flex-col">
             <div className="bg-gradient-to-r from-[#008cf7] to-[#006bb8] text-white p-6">
               <div className="flex items-center justify-between mb-4">

@@ -2,20 +2,20 @@
 
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { 
-  FileText, 
-  Download, 
-  Eye, 
-  Check, 
-  X, 
-  Clock, 
+import {
+  FileText,
+  Download,
+  Eye,
+  Check,
+  X,
+  Clock,
   RefreshCw,
   Filter,
   Search,
   Calendar
 } from "lucide-react";
-import { 
-  generateReportsSummaryPDF, 
+import {
+  generateReportsSummaryPDF,
   generateIndividualReportPDF,
   generateDetailedReportPDF,
   type DetailedReportResponse
@@ -108,7 +108,7 @@ export default function Reports() {
         return;
       }
 
-      const res = await fetch("https://app.codewithseth.co.ke/api/reports", {
+      const res = await fetch("https://app.codewithseth.co.ke/api/admin/reports", {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -122,21 +122,31 @@ export default function Reports() {
       }
 
       const data = await res.json();
-      if (data.success && Array.isArray(data.data)) {
+
+      // Handle both array (direct) and paginated (docs) response structures
+      let reportsArray = [];
+      if (data.success) {
+        if (Array.isArray(data.data)) {
+          reportsArray = data.data;
+        } else if (data.data && Array.isArray(data.data.docs)) {
+          reportsArray = data.data.docs;
+        }
+
         // Debug: Log first report to see structure
-        if (data.data.length > 0) {
+        if (reportsArray.length > 0) {
           console.log('📊 Sample Report Structure:', {
-            hasFileUrl: !!data.data[0].fileUrl,
-            hasFilePath: !!data.data[0].filePath,
-            hasSections: !!data.data[0].sections,
-            hasWeekRange: !!data.data[0].weekRange,
-            sectionsCount: data.data[0].sections?.length || 0,
-            firstReport: data.data[0]
+            hasFileUrl: !!reportsArray[0].fileUrl,
+            hasFilePath: !!reportsArray[0].filePath,
+            hasSections: !!reportsArray[0].sections,
+            hasWeekRange: !!reportsArray[0].weekRange,
+            sectionsCount: reportsArray[0].sections?.length || 0,
+            firstReport: reportsArray[0]
           });
         }
-        setReports(data.data);
+        setReports(reportsArray);
       } else {
-        setError("Unexpected response shape from /api/reports.");
+        console.error("API Error or unexpected shape:", data);
+        setError("Unexpected response shape from /api/admin/reports.");
       }
     } catch (err: any) {
       setError(err?.message || "Network error fetching reports.");
@@ -266,7 +276,7 @@ export default function Reports() {
 
     try {
       setGeneratingPdf(true);
-      
+
       // Try to fetch detailed report data with visits and quotations
       console.log('🔍 Fetching detailed report:', report._id);
       const res = await fetch(
@@ -296,7 +306,7 @@ export default function Reports() {
       }
 
       const detailedData: DetailedReportResponse = await res.json();
-      
+
       if (!detailedData.success || !detailedData.data) {
         console.error('❌ Invalid response structure:', detailedData);
         throw new Error('Invalid response from server');
@@ -308,11 +318,11 @@ export default function Reports() {
         quotations: detailedData.data.quotations?.length || 0,
         totalPotentialValue: detailedData.data.statistics?.visits?.totalPotentialValue || 0
       });
-      
+
       // Use new detailed PDF generator
       const adminName = 'Admin'; // Get from auth context if available
       await generateDetailedReportPDF(detailedData.data, adminName);
-      
+
     } catch (err: any) {
       console.error('❌ PDF generation error:', err);
       alert(`Failed to generate PDF: ${err.message || 'Unknown error'}`);
@@ -324,7 +334,7 @@ export default function Reports() {
   // Filter reports
   const filteredReports = reports.filter(report => {
     const matchesStatus = statusFilter === 'all' || report.status === statusFilter;
-    const matchesSearch = searchTerm === '' || 
+    const matchesSearch = searchTerm === '' ||
       report.userId.firstName.toLowerCase().includes(searchTerm.toLowerCase()) ||
       report.userId.lastName.toLowerCase().includes(searchTerm.toLowerCase()) ||
       report.userId.email.toLowerCase().includes(searchTerm.toLowerCase());
@@ -343,7 +353,7 @@ export default function Reports() {
       </div>
     </div>
   );
-  
+
   if (error)
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 p-6">
@@ -474,8 +484,8 @@ export default function Reports() {
           <FileText className="h-16 w-16 text-gray-300 mx-auto mb-4" />
           <h3 className="text-xl font-semibold text-gray-700 mb-2">No Reports Found</h3>
           <p className="text-gray-500">
-            {searchTerm || statusFilter !== 'all' 
-              ? 'Try adjusting your filters' 
+            {searchTerm || statusFilter !== 'all'
+              ? 'Try adjusting your filters'
               : 'No reports have been submitted yet'}
           </p>
         </div>
@@ -496,11 +506,11 @@ export default function Reports() {
               </thead>
               <tbody>
                 {filteredReports.map((report, index) => {
-                  const statusBadge = 
+                  const statusBadge =
                     report.status === 'approved' ? 'bg-green-100 text-green-700 border-green-300' :
-                    report.status === 'rejected' ? 'bg-red-100 text-red-700 border-red-300' :
-                    'bg-yellow-100 text-yellow-700 border-yellow-300';
-                  
+                      report.status === 'rejected' ? 'bg-red-100 text-red-700 border-red-300' :
+                        'bg-yellow-100 text-yellow-700 border-yellow-300';
+
                   const viewUrl = report.fileUrl ?? (report.filePath ? `https://accordbackend.onrender.com${report.filePath}` : null);
 
                   return (
@@ -616,221 +626,221 @@ export default function Reports() {
                               {(() => {
                                 const reportSections = report.content?.sections || report.sections;
                                 return reportSections && reportSections.length > 0 ? (
-                                reportSections.map((section, idx) => {
-                                  // Skip empty sections
-                                  if (!section.content || section.content.trim() === '') return null;
+                                  reportSections.map((section, idx) => {
+                                    // Skip empty sections
+                                    if (!section.content || section.content.trim() === '') return null;
 
-                                  // Determine section styling
-                                  let bgColor = 'bg-gray-50';
-                                  let borderColor = 'border-gray-200';
-                                  let icon = '📄';
+                                    // Determine section styling
+                                    let bgColor = 'bg-gray-50';
+                                    let borderColor = 'border-gray-200';
+                                    let icon = '📄';
 
-                                  switch (section.id) {
-                                    case 'summary':
-                                      bgColor = 'bg-gray-50';
-                                      borderColor = 'border-gray-200';
-                                      icon = '📋';
-                                      break;
-                                    case 'visits':
-                                      bgColor = 'bg-blue-50';
-                                      borderColor = 'border-blue-200';
-                                      icon = '👥';
-                                      break;
-                                    case 'quotations':
-                                      bgColor = 'bg-green-50';
-                                      borderColor = 'border-green-200';
-                                      icon = '💰';
-                                      break;
-                                    case 'leads':
-                                      bgColor = 'bg-yellow-50';
-                                      borderColor = 'border-yellow-200';
-                                      icon = '🎯';
-                                      break;
-                                    case 'challenges':
-                                      bgColor = 'bg-red-50';
-                                      borderColor = 'border-red-200';
-                                      icon = '⚠️';
-                                      break;
-                                    case 'nextWeek':
-                                    case 'next-week':
-                                      bgColor = 'bg-purple-50';
-                                      borderColor = 'border-purple-200';
-                                      icon = '⚡';
-                                      break;
-                                  }
+                                    switch (section.id) {
+                                      case 'summary':
+                                        bgColor = 'bg-gray-50';
+                                        borderColor = 'border-gray-200';
+                                        icon = '📋';
+                                        break;
+                                      case 'visits':
+                                        bgColor = 'bg-blue-50';
+                                        borderColor = 'border-blue-200';
+                                        icon = '👥';
+                                        break;
+                                      case 'quotations':
+                                        bgColor = 'bg-green-50';
+                                        borderColor = 'border-green-200';
+                                        icon = '💰';
+                                        break;
+                                      case 'leads':
+                                        bgColor = 'bg-yellow-50';
+                                        borderColor = 'border-yellow-200';
+                                        icon = '🎯';
+                                        break;
+                                      case 'challenges':
+                                        bgColor = 'bg-red-50';
+                                        borderColor = 'border-red-200';
+                                        icon = '⚠️';
+                                        break;
+                                      case 'nextWeek':
+                                      case 'next-week':
+                                        bgColor = 'bg-purple-50';
+                                        borderColor = 'border-purple-200';
+                                        icon = '⚡';
+                                        break;
+                                    }
 
-                                  return (
-                                    <div key={idx} className="mb-6">
-                                      <h4 className="text-lg font-bold text-gray-900 mb-3 flex items-center">
-                                        {icon} {section.title}
-                                      </h4>
-                                      <div className={`${bgColor} rounded-lg p-4 border-2 ${borderColor}`}>
-                                        <p className="text-sm text-gray-700 whitespace-pre-wrap">{section.content}</p>
-                                      </div>
-                                    </div>
-                                  );
-                                })
-                              ) : (
-                                <>
-                                  {/* BASIC TEXT CONTENT (if sections not available but report text exists) */}
-                                  {report.report && report.report.trim() ? (
-                                    <div className="mb-6">
-                                      <h4 className="text-lg font-bold text-gray-900 mb-3 flex items-center">
-                                        📋 Report Content
-                                      </h4>
-                                      <div className="bg-gray-50 rounded-lg p-4 border-2 border-gray-200">
-                                        <p className="text-sm text-gray-700 whitespace-pre-wrap">{report.report}</p>
-                                      </div>
-                                    </div>
-                                  ) : (
-                                    <>
-                                      {/* LEGACY: Old metadata structure (fallback) */}
-                                      {/* Weekly Summary */}
-                                      {report.weeklySummary && (
-                                <div className="mb-6">
-                                  <h4 className="text-lg font-bold text-gray-900 mb-3 flex items-center">
-                                    📋 Weekly Summary
-                                  </h4>
-                                  <div className="bg-gray-50 rounded-lg p-4 border-2 border-gray-200">
-                                    <p className="text-sm text-gray-700 whitespace-pre-wrap">{report.weeklySummary}</p>
-                                  </div>
-                                </div>
-                              )}
-
-                              {/* Visits */}
-                              {report.visits && report.visits.length > 0 && (
-                                <div className="mb-6">
-                                  <h4 className="text-lg font-bold text-gray-900 mb-3 flex items-center">
-                                    👥 Customer Visits ({report.visits.length} visits)
-                                  </h4>
-                                  <div className="space-y-3">
-                                    {report.visits.map((visit, idx) => (
-                                      <div key={idx} className="bg-blue-50 rounded-lg p-4 border-2 border-blue-200">
-                                        <div className="flex items-start">
-                                          <span className="bg-[#008cf7] text-white rounded-full h-6 w-6 flex items-center justify-center text-xs font-bold mr-3 mt-1">
-                                            {idx + 1}
-                                          </span>
-                                          <div className="flex-1">
-                                            <p className="font-semibold text-gray-900">
-                                              {visit.hospital || visit.clientName || 'N/A'}
-                                            </p>
-                                            {visit.purpose && (
-                                              <p className="text-sm text-gray-600 mt-1">
-                                                <span className="font-medium">Purpose:</span> {visit.purpose}
-                                              </p>
-                                            )}
-                                            {visit.outcome && (
-                                              <p className="text-sm text-gray-600 mt-1">
-                                                <span className="font-medium">Outcome:</span> {visit.outcome}
-                                              </p>
-                                            )}
-                                            {visit.notes && (
-                                              <p className="text-sm text-gray-500 mt-1 italic">{visit.notes}</p>
-                                            )}
-                                          </div>
+                                    return (
+                                      <div key={idx} className="mb-6">
+                                        <h4 className="text-lg font-bold text-gray-900 mb-3 flex items-center">
+                                          {icon} {section.title}
+                                        </h4>
+                                        <div className={`${bgColor} rounded-lg p-4 border-2 ${borderColor}`}>
+                                          <p className="text-sm text-gray-700 whitespace-pre-wrap">{section.content}</p>
                                         </div>
                                       </div>
-                                    ))}
-                                  </div>
-                                </div>
-                              )}
-
-                              {/* Quotations */}
-                              {report.quotations && report.quotations.length > 0 && (
-                                <div className="mb-6">
-                                  <h4 className="text-lg font-bold text-gray-900 mb-3 flex items-center">
-                                    💰 Quotations Generated ({report.quotations.length} quotations)
-                                  </h4>
-                                  <div className="space-y-3">
-                                    {report.quotations.map((quote, idx) => (
-                                      <div key={idx} className="bg-green-50 rounded-lg p-4 border-2 border-green-200">
-                                        <p className="font-semibold text-gray-900">• {quote.equipment || 'Equipment'}</p>
-                                        <p className="text-sm text-gray-600 mt-1">Client: {quote.clientName || 'N/A'}</p>
-                                        {quote.amount && (
-                                          <p className="text-sm text-green-700 font-bold mt-1">KES {quote.amount.toLocaleString()}</p>
-                                        )}
-                                        {quote.status && (
-                                          <span className="inline-block mt-2 px-2 py-1 bg-green-200 text-green-800 text-xs rounded-full">
-                                            {quote.status}
-                                          </span>
-                                        )}
+                                    );
+                                  })
+                                ) : (
+                                  <>
+                                    {/* BASIC TEXT CONTENT (if sections not available but report text exists) */}
+                                    {report.report && report.report.trim() ? (
+                                      <div className="mb-6">
+                                        <h4 className="text-lg font-bold text-gray-900 mb-3 flex items-center">
+                                          📋 Report Content
+                                        </h4>
+                                        <div className="bg-gray-50 rounded-lg p-4 border-2 border-gray-200">
+                                          <p className="text-sm text-gray-700 whitespace-pre-wrap">{report.report}</p>
+                                        </div>
                                       </div>
-                                    ))}
-                                  </div>
-                                </div>
-                              )}
-
-                              {/* New Leads */}
-                              {report.newLeads && report.newLeads.length > 0 && (
-                                <div className="mb-6">
-                                  <h4 className="text-lg font-bold text-gray-900 mb-3 flex items-center">
-                                    🎯 New Leads ({report.newLeads.length} leads)
-                                  </h4>
-                                  <div className="space-y-2">
-                                    {report.newLeads.map((lead, idx) => (
-                                      <div key={idx} className="bg-yellow-50 rounded-lg p-3 border-2 border-yellow-200">
-                                        <p className="font-semibold text-gray-900">• {lead.name || 'N/A'}</p>
-                                        {lead.interest && (
-                                          <p className="text-sm text-gray-600 mt-1">{lead.interest}</p>
+                                    ) : (
+                                      <>
+                                        {/* LEGACY: Old metadata structure (fallback) */}
+                                        {/* Weekly Summary */}
+                                        {report.weeklySummary && (
+                                          <div className="mb-6">
+                                            <h4 className="text-lg font-bold text-gray-900 mb-3 flex items-center">
+                                              📋 Weekly Summary
+                                            </h4>
+                                            <div className="bg-gray-50 rounded-lg p-4 border-2 border-gray-200">
+                                              <p className="text-sm text-gray-700 whitespace-pre-wrap">{report.weeklySummary}</p>
+                                            </div>
+                                          </div>
                                         )}
-                                        {lead.notes && (
-                                          <p className="text-xs text-gray-500 mt-1 italic">{lead.notes}</p>
+
+                                        {/* Visits */}
+                                        {report.visits && report.visits.length > 0 && (
+                                          <div className="mb-6">
+                                            <h4 className="text-lg font-bold text-gray-900 mb-3 flex items-center">
+                                              👥 Customer Visits ({report.visits.length} visits)
+                                            </h4>
+                                            <div className="space-y-3">
+                                              {report.visits.map((visit, idx) => (
+                                                <div key={idx} className="bg-blue-50 rounded-lg p-4 border-2 border-blue-200">
+                                                  <div className="flex items-start">
+                                                    <span className="bg-[#008cf7] text-white rounded-full h-6 w-6 flex items-center justify-center text-xs font-bold mr-3 mt-1">
+                                                      {idx + 1}
+                                                    </span>
+                                                    <div className="flex-1">
+                                                      <p className="font-semibold text-gray-900">
+                                                        {visit.hospital || visit.clientName || 'N/A'}
+                                                      </p>
+                                                      {visit.purpose && (
+                                                        <p className="text-sm text-gray-600 mt-1">
+                                                          <span className="font-medium">Purpose:</span> {visit.purpose}
+                                                        </p>
+                                                      )}
+                                                      {visit.outcome && (
+                                                        <p className="text-sm text-gray-600 mt-1">
+                                                          <span className="font-medium">Outcome:</span> {visit.outcome}
+                                                        </p>
+                                                      )}
+                                                      {visit.notes && (
+                                                        <p className="text-sm text-gray-500 mt-1 italic">{visit.notes}</p>
+                                                      )}
+                                                    </div>
+                                                  </div>
+                                                </div>
+                                              ))}
+                                            </div>
+                                          </div>
                                         )}
-                                      </div>
-                                    ))}
-                                  </div>
-                                </div>
-                              )}
 
-                              {/* Challenges */}
-                              {report.challenges && (
-                                <div className="mb-6">
-                                  <h4 className="text-lg font-bold text-gray-900 mb-3 flex items-center">
-                                    ⚠️ Challenges Faced
-                                  </h4>
-                                  <div className="bg-red-50 rounded-lg p-4 border-2 border-red-200">
-                                    <p className="text-sm text-gray-700 whitespace-pre-wrap">{report.challenges}</p>
-                                  </div>
-                                </div>
-                              )}
+                                        {/* Quotations */}
+                                        {report.quotations && report.quotations.length > 0 && (
+                                          <div className="mb-6">
+                                            <h4 className="text-lg font-bold text-gray-900 mb-3 flex items-center">
+                                              💰 Quotations Generated ({report.quotations.length} quotations)
+                                            </h4>
+                                            <div className="space-y-3">
+                                              {report.quotations.map((quote, idx) => (
+                                                <div key={idx} className="bg-green-50 rounded-lg p-4 border-2 border-green-200">
+                                                  <p className="font-semibold text-gray-900">• {quote.equipment || 'Equipment'}</p>
+                                                  <p className="text-sm text-gray-600 mt-1">Client: {quote.clientName || 'N/A'}</p>
+                                                  {quote.amount && (
+                                                    <p className="text-sm text-green-700 font-bold mt-1">KES {quote.amount.toLocaleString()}</p>
+                                                  )}
+                                                  {quote.status && (
+                                                    <span className="inline-block mt-2 px-2 py-1 bg-green-200 text-green-800 text-xs rounded-full">
+                                                      {quote.status}
+                                                    </span>
+                                                  )}
+                                                </div>
+                                              ))}
+                                            </div>
+                                          </div>
+                                        )}
 
-                              {/* Next Week Plan */}
-                              {report.nextWeekPlan && (
-                                <div className="mb-6">
-                                  <h4 className="text-lg font-bold text-gray-900 mb-3 flex items-center">
-                                    ⚡ Next Week's Plan
-                                  </h4>
-                                  <div className="bg-purple-50 rounded-lg p-4 border-2 border-purple-200">
-                                    <p className="text-sm text-gray-700 whitespace-pre-wrap">{report.nextWeekPlan}</p>
-                                  </div>
-                                </div>
-                              )}
+                                        {/* New Leads */}
+                                        {report.newLeads && report.newLeads.length > 0 && (
+                                          <div className="mb-6">
+                                            <h4 className="text-lg font-bold text-gray-900 mb-3 flex items-center">
+                                              🎯 New Leads ({report.newLeads.length} leads)
+                                            </h4>
+                                            <div className="space-y-2">
+                                              {report.newLeads.map((lead, idx) => (
+                                                <div key={idx} className="bg-yellow-50 rounded-lg p-3 border-2 border-yellow-200">
+                                                  <p className="font-semibold text-gray-900">• {lead.name || 'N/A'}</p>
+                                                  {lead.interest && (
+                                                    <p className="text-sm text-gray-600 mt-1">{lead.interest}</p>
+                                                  )}
+                                                  {lead.notes && (
+                                                    <p className="text-xs text-gray-500 mt-1 italic">{lead.notes}</p>
+                                                  )}
+                                                </div>
+                                              ))}
+                                            </div>
+                                          </div>
+                                        )}
 
-                              {/* Admin Notes */}
-                              {report.adminNotes && (
-                                <div className="mb-6">
-                                  <h4 className="text-lg font-bold text-gray-900 mb-3 flex items-center">
-                                    📝 Admin Notes
-                                  </h4>
-                                  <div className="bg-gray-100 rounded-lg p-4 border-2 border-gray-300">
-                                    <p className="text-sm text-gray-700 whitespace-pre-wrap">{report.adminNotes}</p>
-                                  </div>
-                                </div>
-                              )}
+                                        {/* Challenges */}
+                                        {report.challenges && (
+                                          <div className="mb-6">
+                                            <h4 className="text-lg font-bold text-gray-900 mb-3 flex items-center">
+                                              ⚠️ Challenges Faced
+                                            </h4>
+                                            <div className="bg-red-50 rounded-lg p-4 border-2 border-red-200">
+                                              <p className="text-sm text-gray-700 whitespace-pre-wrap">{report.challenges}</p>
+                                            </div>
+                                          </div>
+                                        )}
 
-                              {/* No Content Message */}
-                              {!report.report && !report.content?.sections?.length && !report.sections?.length && !report.weeklySummary && !report.visits?.length && !report.quotations?.length && 
-                               !report.newLeads?.length && !report.challenges && !report.nextWeekPlan && (
-                                <div className="text-center py-12">
-                                  <FileText className="h-16 w-16 text-gray-300 mx-auto mb-4" />
-                                  <p className="text-gray-500">No detailed report content available.</p>
-                                  <p className="text-sm text-gray-400 mt-2">The report may only contain an attached file.</p>
-                                </div>
-                              )}
-                                    </>
-                                  )}
-                                </>
-                              );
+                                        {/* Next Week Plan */}
+                                        {report.nextWeekPlan && (
+                                          <div className="mb-6">
+                                            <h4 className="text-lg font-bold text-gray-900 mb-3 flex items-center">
+                                              ⚡ Next Week's Plan
+                                            </h4>
+                                            <div className="bg-purple-50 rounded-lg p-4 border-2 border-purple-200">
+                                              <p className="text-sm text-gray-700 whitespace-pre-wrap">{report.nextWeekPlan}</p>
+                                            </div>
+                                          </div>
+                                        )}
+
+                                        {/* Admin Notes */}
+                                        {report.adminNotes && (
+                                          <div className="mb-6">
+                                            <h4 className="text-lg font-bold text-gray-900 mb-3 flex items-center">
+                                              📝 Admin Notes
+                                            </h4>
+                                            <div className="bg-gray-100 rounded-lg p-4 border-2 border-gray-300">
+                                              <p className="text-sm text-gray-700 whitespace-pre-wrap">{report.adminNotes}</p>
+                                            </div>
+                                          </div>
+                                        )}
+
+                                        {/* No Content Message */}
+                                        {!report.report && !report.content?.sections?.length && !report.sections?.length && !report.weeklySummary && !report.visits?.length && !report.quotations?.length &&
+                                          !report.newLeads?.length && !report.challenges && !report.nextWeekPlan && (
+                                            <div className="text-center py-12">
+                                              <FileText className="h-16 w-16 text-gray-300 mx-auto mb-4" />
+                                              <p className="text-gray-500">No detailed report content available.</p>
+                                              <p className="text-sm text-gray-400 mt-2">The report may only contain an attached file.</p>
+                                            </div>
+                                          )}
+                                      </>
+                                    )}
+                                  </>
+                                );
                               })()}
                             </div>
 
@@ -865,7 +875,7 @@ export default function Reports() {
                               <p className="text-sm text-gray-600 mb-4">
                                 Update status for <strong>{report.userId.firstName} {report.userId.lastName}</strong>
                               </p>
-                              
+
                               <div className="space-y-4">
                                 <div>
                                   <label className="block text-sm font-medium text-gray-700 mb-2">

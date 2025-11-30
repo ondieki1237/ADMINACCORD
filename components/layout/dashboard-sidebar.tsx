@@ -6,15 +6,15 @@ import { authService } from "@/lib/auth";
 import { hasAdminAccess, canViewHeatmap } from "@/lib/permissions";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { 
-  LayoutDashboard, 
-  MapPin, 
-  Users, 
-  Clock, 
-  FileText, 
-  TrendingUp, 
-  UserPlus, 
-  Settings, 
+import {
+  LayoutDashboard,
+  MapPin,
+  Users,
+  Clock,
+  FileText,
+  TrendingUp,
+  UserPlus,
+  Settings,
   Calendar,
   BarChart3,
   Shield,
@@ -57,69 +57,76 @@ export function DashboardSidebar({ currentPage = "dashboard", onPageChange }: Da
   };
 
   const navItems = [
-    { 
-      icon: LayoutDashboard, 
-      label: "Dashboard", 
+    {
+      icon: LayoutDashboard,
+      label: "Dashboard",
       path: "/dashboard",
       color: "text-[#008cf7]",
       bgColor: "bg-blue-50"
     },
-    { 
-      icon: CalendarCheck, 
-      label: "Daily Reports", 
+    {
+      icon: CalendarCheck,
+      label: "Daily Reports",
       path: "/dashboard/daily-reports",
       color: "text-emerald-600",
       bgColor: "bg-emerald-50"
     },
-    { 
-      icon: TrendingUp, 
-      label: "Performance", 
+    {
+      icon: TrendingUp,
+      label: "Performance",
       path: "/dashboard/performance-analytics",
       color: "text-purple-600",
       bgColor: "bg-purple-50"
     },
-    { 
-      icon: Shield, 
-      label: "Engineer Reports", 
+    {
+      icon: Shield,
+      label: "Engineer Reports",
       path: "/dashboard/engineer-reports",
       color: "text-green-600",
       bgColor: "bg-green-50"
     },
     // Sales Reports removed per request
-    { 
-      icon: BarChart3, 
-      label: "Analytics", 
+    {
+      icon: BarChart3,
+      label: "Analytics",
       path: "/dashboard/advanced-analytics",
       color: "text-indigo-600",
       bgColor: "bg-indigo-50"
     },
+    {
+      icon: FileText,
+      label: "Weekly Reports",
+      path: "/dashboard/reports",
+      color: "text-blue-600",
+      bgColor: "bg-blue-50"
+    },
   ];
 
   const quickActions = [
-    { 
-      icon: UserPlus, 
-      label: "Leads", 
+    {
+      icon: UserPlus,
+      label: "Leads",
       path: "/dashboard/leads",
       color: "text-purple-600",
       bgColor: "bg-purple-50"
     },
-    { 
-      icon: Settings, 
-      label: "Machines", 
+    {
+      icon: Settings,
+      label: "Machines",
       path: "/dashboard/machines",
       color: "text-orange-600",
       bgColor: "bg-orange-50"
     },
-    { 
-      icon: Users, 
-      label: "Users", 
+    {
+      icon: Users,
+      label: "Users",
       path: "/dashboard/user-manager",
       color: "text-green-600",
       bgColor: "bg-green-50"
     },
-    { 
-      icon: Calendar, 
-      label: "Planners", 
+    {
+      icon: Calendar,
+      label: "Planners",
       path: "/dashboard/planners",
       color: "text-gray-900",
       bgColor: "bg-gray-100"
@@ -128,9 +135,9 @@ export function DashboardSidebar({ currentPage = "dashboard", onPageChange }: Da
 
   // Add Sales Heatmap if user has permission
   if (canViewHeatmap(currentUser)) {
-    quickActions.unshift({ 
-      icon: MapPin, 
-      label: "Heatmap", 
+    quickActions.unshift({
+      icon: MapPin,
+      label: "Heatmap",
       path: "/dashboard/sales-heatmap",
       color: "text-blue-600",
       bgColor: "bg-blue-50"
@@ -144,10 +151,9 @@ export function DashboardSidebar({ currentPage = "dashboard", onPageChange }: Da
   ];
 
   return (
-    <aside 
-      className={`fixed left-0 top-0 h-full bg-white border-r border-gray-100 transition-all duration-300 z-40 ${
-        isCollapsed ? "w-20" : "w-64"
-      } hidden lg:block`}
+    <aside
+      className={`fixed left-0 top-0 h-full bg-white border-r border-gray-100 transition-all duration-300 z-40 ${isCollapsed ? "w-20" : "w-64"
+        } hidden lg:block`}
     >
       <div className="flex flex-col h-full">
         {/* Header with Logo */}
@@ -209,16 +215,15 @@ export function DashboardSidebar({ currentPage = "dashboard", onPageChange }: Da
               {navItems.map((item) => {
                 const Icon = item.icon;
                 const isActive = currentPage === item.path || currentPage === item.path.replace('/dashboard/', '');
-                
+
                 return (
                   <button
                     key={item.path}
                     onClick={() => handleNavigation(item.path)}
-                    className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200 group ${
-                      isActive
+                    className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200 group ${isActive
                         ? `${item.bgColor} ${item.color} shadow-sm`
                         : "text-gray-600 hover:bg-gray-50"
-                    }`}
+                      }`}
                   >
                     <div className={`flex-shrink-0 ${isCollapsed ? "mx-auto" : ""}`}>
                       <Icon className={`h-5 w-5 ${isActive ? item.color : "text-gray-400 group-hover:text-gray-600"}`} />
@@ -246,16 +251,15 @@ export function DashboardSidebar({ currentPage = "dashboard", onPageChange }: Da
               {quickActions.map((item) => {
                 const Icon = item.icon;
                 const isActive = currentPage === item.path || currentPage === item.path.replace('/dashboard/', '');
-                
+
                 return (
                   <button
                     key={item.path}
                     onClick={() => handleNavigation(item.path)}
-                    className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200 group ${
-                      isActive
+                    className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200 group ${isActive
                         ? `${item.bgColor} ${item.color} shadow-sm`
                         : "text-gray-600 hover:bg-gray-50"
-                    }`}
+                      }`}
                   >
                     <div className={`flex-shrink-0 ${isCollapsed ? "mx-auto" : ""}`}>
                       <Icon className={`h-5 w-5 ${isActive ? item.color : "text-gray-400 group-hover:text-gray-600"}`} />
@@ -278,7 +282,7 @@ export function DashboardSidebar({ currentPage = "dashboard", onPageChange }: Da
               <nav className="space-y-1">
                 {favorites.map((item) => {
                   const Icon = item.icon;
-                  
+
                   return (
                     <button
                       key={item.path}
@@ -300,11 +304,10 @@ export function DashboardSidebar({ currentPage = "dashboard", onPageChange }: Da
           <Button
             variant="ghost"
             onClick={handleLogout}
-            className={`w-full ${
-              isCollapsed 
-                ? "p-2 justify-center" 
+            className={`w-full ${isCollapsed
+                ? "p-2 justify-center"
                 : "justify-start gap-3"
-            } text-gray-600 hover:text-red-600 hover:bg-red-50`}
+              } text-gray-600 hover:text-red-600 hover:bg-red-50`}
           >
             <LogOut className="h-5 w-5" />
             {!isCollapsed && <span className="text-sm font-medium">Logout</span>}
