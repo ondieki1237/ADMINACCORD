@@ -22,7 +22,8 @@ import {
   ChevronRight,
   LogOut,
   Star,
-  CalendarCheck
+  CalendarCheck,
+  Package
 } from "lucide-react";
 
 interface DashboardSidebarProps {
@@ -116,6 +117,13 @@ export function DashboardSidebar({ currentPage = "dashboard", onPageChange }: Da
       path: "/dashboard/machines",
       color: "text-orange-600",
       bgColor: "bg-orange-50"
+    },
+    {
+      icon: Package,
+      label: "Consumables",
+      path: "/dashboard/consumables",
+      color: "text-cyan-600",
+      bgColor: "bg-cyan-50"
     },
     {
       icon: Users,

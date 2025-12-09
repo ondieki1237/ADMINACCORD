@@ -528,6 +528,55 @@ class ApiService {
       method: "DELETE",
     });
   }
+
+  // Consumables endpoints
+  async getConsumables(page = 1, limit = 20, filters: Record<string, any> = {}): Promise<any> {
+    const params = new URLSearchParams({ 
+      page: String(page), 
+      limit: String(limit),
+      _t: String(Date.now()) // Cache buster
+    });
+    Object.entries(filters).forEach(([k, v]) => {
+      if (v !== undefined && v !== null && v !== "") params.set(k, String(v));
+    });
+    return this.makeRequest(`/admin/consumables?${params.toString()}`, {
+      headers: {
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Pragma': 'no-cache',
+        'Expires': '0'
+      }
+    });
+  }
+
+  async getConsumableById(consumableId: string): Promise<any> {
+    return this.makeRequest(`/admin/consumables/${encodeURIComponent(consumableId)}`);
+  }
+
+  async createConsumable(payload: {
+    category: string;
+    name: string;
+    price: number;
+    unit: string;
+    description?: string;
+  }): Promise<any> {
+    return this.makeRequest(`/admin/consumables`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  }
+
+  async updateConsumable(consumableId: string, payload: Record<string, any>): Promise<any> {
+    return this.makeRequest(`/admin/consumables/${encodeURIComponent(consumableId)}`, {
+      method: "PUT",
+      body: JSON.stringify(payload),
+    });
+  }
+
+  async deleteConsumable(consumableId: string): Promise<any> {
+    return this.makeRequest(`/admin/consumables/${encodeURIComponent(consumableId)}`, {
+      method: "DELETE",
+    });
+  }
 }
 
 export const apiService = new ApiService()

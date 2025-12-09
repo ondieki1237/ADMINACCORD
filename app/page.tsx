@@ -23,6 +23,7 @@ const ReportsManager = dynamic(() => import("@/components/dashboard/reports"), {
 const AdvancedAnalytics = dynamic(() => import("@/components/dashboard/advanced-analytics"), { ssr: false })
 const LeadsList = dynamic(() => import("@/components/dashboard/leads"), { ssr: false })
 const MachinesList = dynamic(() => import("@/components/dashboard/machines"), { ssr: false })
+const ConsumablesList = dynamic(() => import("@/components/dashboard/consumables"), { ssr: false })
 const UserManager = dynamic(() => import("@/components/dashboard/user-manager"), { ssr: false })
 const PlannersManager = dynamic(() => import("@/components/dashboard/planners"), { ssr: false })
 const SalesHeatmap = dynamic(() => import("@/components/dashboard/sales-heatmap"), { ssr: false })
@@ -48,7 +49,7 @@ export default function HomePage() {
   }
 
   const handleSwipeLeft = () => {
-    const pages = ["dashboard", "visits", "trails", "follow-ups", "profile", "reports", "advanced-analytics", "leads", "machines", "user-manager", "planners", "sales-heatmap", "daily-reports", "performance-analytics", "engineer-reports", "engineer-finance"]
+    const pages = ["dashboard", "visits", "trails", "follow-ups", "profile", "reports", "advanced-analytics", "leads", "machines", "consumables", "user-manager", "planners", "sales-heatmap", "daily-reports", "performance-analytics", "engineer-reports", "engineer-finance"]
     const currentIndex = pages.indexOf(currentPage)
     if (currentIndex < pages.length - 1) {
       setCurrentPage(pages[currentIndex + 1])
@@ -56,7 +57,7 @@ export default function HomePage() {
   }
 
   const handleSwipeRight = () => {
-    const pages = ["dashboard", "visits", "trails", "follow-ups", "profile", "reports", "advanced-analytics", "leads", "machines", "user-manager", "planners", "sales-heatmap", "daily-reports", "performance-analytics", "engineer-reports", "engineer-finance"]
+    const pages = ["dashboard", "visits", "trails", "follow-ups", "profile", "reports", "advanced-analytics", "leads", "machines", "consumables", "user-manager", "planners", "sales-heatmap", "daily-reports", "performance-analytics", "engineer-reports", "engineer-finance"]
     const currentIndex = pages.indexOf(currentPage)
     if (currentIndex > 0) {
       setCurrentPage(pages[currentIndex - 1])
@@ -109,6 +110,8 @@ export default function HomePage() {
         return <LeadsList />
       case "machines":
         return <MachinesList />
+      case "consumables":
+        return <ConsumablesList />
       case "user-manager":
         return <UserManager />
       case "planners":
