@@ -1,4 +1,6 @@
-import MachinesList from "@/components/dashboard/machines"
+"use client"
+
+import MachinesList from '@/components/dashboard/machines'
 
 export default function MachinesPage() {
   return (

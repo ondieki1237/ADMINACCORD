@@ -335,9 +335,9 @@ export default function Reports() {
   const filteredReports = reports.filter(report => {
     const matchesStatus = statusFilter === 'all' || report.status === statusFilter;
     const matchesSearch = searchTerm === '' ||
-      report.userId.firstName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      report.userId.lastName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      report.userId.email.toLowerCase().includes(searchTerm.toLowerCase());
+      report.userId?.firstName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      report.userId?.lastName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      report.userId?.email?.toLowerCase().includes(searchTerm.toLowerCase());
     return matchesStatus && matchesSearch;
   });
 
@@ -519,9 +519,9 @@ export default function Reports() {
                       <td className="px-6 py-4">
                         <div>
                           <p className="text-sm font-semibold text-gray-900">
-                            {report.userId.firstName} {report.userId.lastName}
+                            {report.userId?.firstName ?? 'Unknown'} {report.userId?.lastName ?? 'User'}
                           </p>
-                          <p className="text-xs text-gray-500">{report.userId.email}</p>
+                          <p className="text-xs text-gray-500">{report.userId?.email ?? 'No email'}</p>
                         </div>
                       </td>
                       <td className="px-6 py-4 text-sm text-gray-700">
@@ -590,9 +590,9 @@ export default function Reports() {
                               <div className="flex justify-between items-start">
                                 <div>
                                   <h3 className="text-2xl font-bold mb-2">
-                                    📄 Weekly Report - {report.userId.firstName} {report.userId.lastName}
+                                    📄 Weekly Report - {report.userId?.firstName ?? 'Unknown'} {report.userId?.lastName ?? 'User'}
                                   </h3>
-                                  <p className="text-sm opacity-90">{report.userId.email}</p>
+                                  <p className="text-sm opacity-90">{report.userId?.email ?? 'No email'}</p>
                                 </div>
                                 <button
                                   onClick={() => {
@@ -873,7 +873,7 @@ export default function Reports() {
                             <div className="bg-white rounded-2xl shadow-2xl p-6 max-w-md w-full mx-4">
                               <h3 className="text-lg font-bold text-gray-900 mb-4">Review Report</h3>
                               <p className="text-sm text-gray-600 mb-4">
-                                Update status for <strong>{report.userId.firstName} {report.userId.lastName}</strong>
+                                Update status for <strong>{report.userId?.firstName ?? 'Unknown'} {report.userId?.lastName ?? 'User'}</strong>
                               </p>
 
                               <div className="space-y-4">

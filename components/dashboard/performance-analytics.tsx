@@ -560,7 +560,7 @@ export function PerformanceAnalytics() {
                   <CardContent>
                     <div className="flex items-center gap-2">
                       <BarChart3 className="h-4 w-4 text-red-500" />
-                      <p className="text-2xl font-bold">{liveRealtime.conversion_rate_today.toFixed(1)}%</p>
+                      <p className="text-2xl font-bold">{liveRealtime.conversion_rate_today?.toFixed(1) ?? '0.0'}%</p>
                     </div>
                   </CardContent>
                 </Card>
@@ -591,11 +591,11 @@ export function PerformanceAnalytics() {
                     <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
                       <div className="p-4 border rounded-lg">
                         <p className="text-sm text-muted-foreground mb-1">Total Visits</p>
-                        <p className="text-2xl font-bold">{liveDashboard.summary.total_visits}</p>
+                        <p className="text-2xl font-bold">{liveDashboard.summary?.total_visits ?? 0}</p>
                       </div>
                       <div className="p-4 border rounded-lg">
                         <p className="text-sm text-muted-foreground mb-1">Total Orders</p>
-                        <p className="text-2xl font-bold">{liveDashboard.summary.total_orders}</p>
+                        <p className="text-2xl font-bold">{liveDashboard.summary?.total_orders ?? 0}</p>
                       </div>
                       <div className="p-4 border rounded-lg">
                         <p className="text-sm text-muted-foreground mb-1">Total Revenue</p>
@@ -604,12 +604,12 @@ export function PerformanceAnalytics() {
                             style: 'currency',
                             currency: 'KES',
                             minimumFractionDigits: 0
-                          }).format(liveDashboard.summary.total_revenue)}
+                          }).format(liveDashboard.summary?.total_revenue ?? 0)}
                         </p>
                       </div>
                       <div className="p-4 border rounded-lg">
                         <p className="text-sm text-muted-foreground mb-1">Conversion Rate</p>
-                        <p className="text-2xl font-bold">{liveDashboard.summary.conversion_rate.toFixed(2)}%</p>
+                        <p className="text-2xl font-bold">{liveDashboard.summary?.conversion_rate?.toFixed(2) ?? '0.00'}%</p>
                       </div>
                       <div className="p-4 border rounded-lg">
                         <p className="text-sm text-muted-foreground mb-1">Avg Order Value</p>
@@ -618,7 +618,7 @@ export function PerformanceAnalytics() {
                             style: 'currency',
                             currency: 'KES',
                             minimumFractionDigits: 0
-                          }).format(liveDashboard.summary.avg_order_value)}
+                          }).format(liveDashboard.summary?.avg_order_value ?? 0)}
                         </p>
                       </div>
                     </div>
@@ -635,32 +635,32 @@ export function PerformanceAnalytics() {
                     <div className="space-y-4">
                       <div className="flex items-center justify-between p-3 border rounded-lg">
                         <span className="font-medium">Visits</span>
-                        <span className="text-2xl font-bold">{liveDashboard.conversion_funnel.visits}</span>
+                        <span className="text-2xl font-bold">{liveDashboard.conversion_funnel?.visits ?? 0}</span>
                       </div>
                       <div className="flex items-center justify-between p-3 border rounded-lg bg-muted/50">
                         <span className="font-medium">Successful Visits</span>
                         <div className="text-right">
-                          <span className="text-2xl font-bold">{liveDashboard.conversion_funnel.successful_visits}</span>
+                          <span className="text-2xl font-bold">{liveDashboard.conversion_funnel?.successful_visits ?? 0}</span>
                           <span className="text-sm text-muted-foreground ml-2">
-                            ({liveDashboard.conversion_funnel.visit_success_rate.toFixed(1)}%)
+                            ({liveDashboard.conversion_funnel?.visit_success_rate?.toFixed(1) ?? '0.0'}%)
                           </span>
                         </div>
                       </div>
                       <div className="flex items-center justify-between p-3 border rounded-lg">
                         <span className="font-medium">Quotations Sent</span>
                         <div className="text-right">
-                          <span className="text-2xl font-bold">{liveDashboard.conversion_funnel.quotations_sent}</span>
+                          <span className="text-2xl font-bold">{liveDashboard.conversion_funnel?.quotations_sent ?? 0}</span>
                           <span className="text-sm text-muted-foreground ml-2">
-                            ({liveDashboard.conversion_funnel.quotation_conversion.toFixed(1)}%)
+                            ({liveDashboard.conversion_funnel?.quotation_conversion?.toFixed(1) ?? '0.0'}%)
                           </span>
                         </div>
                       </div>
                       <div className="flex items-center justify-between p-3 border rounded-lg bg-primary/10">
                         <span className="font-medium">Orders Placed</span>
                         <div className="text-right">
-                          <span className="text-2xl font-bold text-primary">{liveDashboard.conversion_funnel.orders_placed}</span>
+                          <span className="text-2xl font-bold text-primary">{liveDashboard.conversion_funnel?.orders_placed ?? 0}</span>
                           <span className="text-sm text-muted-foreground ml-2">
-                            ({liveDashboard.conversion_funnel.overall_conversion.toFixed(1)}%)
+                            ({liveDashboard.conversion_funnel?.overall_conversion?.toFixed(1) ?? '0.0'}%)
                           </span>
                         </div>
                       </div>
@@ -676,7 +676,7 @@ export function PerformanceAnalytics() {
                   </CardHeader>
                   <CardContent>
                     <div className="space-y-3">
-                      {liveDashboard.top_performers.slice(0, 5).map((performer, idx) => (
+                      {(liveDashboard.top_performers ?? []).slice(0, 5).map((performer, idx) => (
                         <div key={performer.userId} className="flex items-center justify-between p-3 border rounded-lg hover:bg-muted/50 transition">
                           <div className="flex items-center gap-3">
                             <div className="flex items-center justify-center w-8 h-8 rounded-full bg-primary/10 text-primary font-bold">
@@ -696,7 +696,7 @@ export function PerformanceAnalytics() {
                               }).format(performer.total_revenue)}
                             </p>
                             <p className="text-sm text-muted-foreground">
-                              {performer.visit_count} visits • {performer.conversion_rate.toFixed(1)}% conv.
+                              {performer.visit_count} visits • {performer.conversion_rate?.toFixed(1) ?? '0.0'}% conv.
                             </p>
                           </div>
                         </div>

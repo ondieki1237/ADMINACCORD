@@ -1,4 +1,6 @@
-import LeadsList from '../../../components/dashboard/leads'
+"use client"
+
+import LeadsList from '@/components/dashboard/leads'
 
 export default function LeadsPage() {
   return (

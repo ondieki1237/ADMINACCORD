@@ -1,9 +1,11 @@
-import UserManager from '../../../components/dashboard/user-manager';
+"use client"
+
+import UserManager from '@/components/dashboard/user-manager'
 
 export default function UserManagerPage() {
   return (
     <div className="p-6">
       <UserManager />
     </div>
-  );
+  )
 }
