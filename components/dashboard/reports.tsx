@@ -276,52 +276,41 @@ export default function Reports() {
 
     try {
       setGeneratingPdf(true);
+      const adminName = 'Admin'; // Get from auth context if available
 
       // Try to fetch detailed report data with visits and quotations
       console.log('🔍 Fetching detailed report:', report._id);
-      const res = await fetch(
-        `https://app.codewithseth.co.ke/api/admin/reports/${report._id}`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
+
+      try {
+        const res = await fetch(
+          `https://app.codewithseth.co.ke/api/admin/reports/${report._id}`,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+              "Content-Type": "application/json",
+            },
+          }
+        );
+
+        console.log('📡 API Response Status:', res.status);
+
+        if (res.ok) {
+          const detailedData: DetailedReportResponse = await res.json();
+          if (detailedData.success && detailedData.data) {
+            console.log('✅ Detailed Report Data found, using detailed generator');
+            await generateDetailedReportPDF(detailedData.data, adminName);
+            return;
+          }
+        } else {
+          console.warn(`⚠️ Detailed endpoint failed with status ${res.status}. Falling back to basic content.`);
         }
-      );
-
-      console.log('📡 API Response Status:', res.status);
-
-      // If detailed endpoint returns 404, fall back to basic PDF generation
-      if (res.status === 404) {
-        console.log('⚠️ Detailed endpoint not available, using basic PDF generator');
-        const adminName = 'Admin';
-        await generateIndividualReportPDF(report as ReportPdfType, adminName);
-        return;
+      } catch (fetchErr) {
+        console.warn('⚠️ Could not connect to detailed endpoint, falling back to basic content:', fetchErr);
       }
 
-      if (!res.ok) {
-        const errorText = await res.text();
-        console.error('❌ API Error Response:', errorText);
-        throw new Error(`Failed to fetch detailed report: ${res.status} - ${errorText}`);
-      }
-
-      const detailedData: DetailedReportResponse = await res.json();
-
-      if (!detailedData.success || !detailedData.data) {
-        console.error('❌ Invalid response structure:', detailedData);
-        throw new Error('Invalid response from server');
-      }
-
-      console.log('✅ Detailed Report Data:', detailedData.data);
-      console.log('📊 Statistics:', {
-        visits: detailedData.data.visits?.length || 0,
-        quotations: detailedData.data.quotations?.length || 0,
-        totalPotentialValue: detailedData.data.statistics?.visits?.totalPotentialValue || 0
-      });
-
-      // Use new detailed PDF generator
-      const adminName = 'Admin'; // Get from auth context if available
-      await generateDetailedReportPDF(detailedData.data, adminName);
+      // Fallback: Use basic PDF generator if detailed fetch fails for any reason
+      console.log('📄 Using individual report generator (basic info)');
+      await generateIndividualReportPDF(report as ReportPdfType, adminName);
 
     } catch (err: any) {
       console.error('❌ PDF generation error:', err);
