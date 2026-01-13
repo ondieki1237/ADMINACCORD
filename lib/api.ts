@@ -1,6 +1,15 @@
 import { authService } from "./auth"
 
-const API_BASE_URL = "https://app.codewithseth.co.ke/api"
+// Determine API base URL:
+// Priority: NEXT_PUBLIC_API_BASE_URL env var (useful for local override)
+// Development: if running in browser on localhost use local backend at port 4500
+// Fallback: deployed production URL
+const DEFAULT_PROD_API = "https://app.codewithseth.co.ke/api"
+const API_BASE_URL: string = (process.env.NEXT_PUBLIC_API_BASE_URL as string) || (
+  (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'))
+    ? 'http://localhost:4500/api'
+    : DEFAULT_PROD_API
+)
 
 export interface DashboardOverview {
   totalVisits: number
@@ -576,6 +585,125 @@ class ApiService {
     return this.makeRequest(`/admin/consumables/${encodeURIComponent(consumableId)}`, {
       method: "DELETE",
     });
+  }
+
+  // ==================== Call Logs / Telesales API ====================
+
+  async getCallLogs(filters: {
+    page?: number;
+    limit?: number;
+    year?: number;
+    month?: number;
+    week?: number;
+    callOutcome?: string;
+    callDirection?: string;
+    search?: string;
+    startDate?: string;
+    endDate?: string;
+    createdBy?: string;
+  } = {}): Promise<any> {
+    const params = new URLSearchParams();
+    Object.entries(filters).forEach(([key, value]) => {
+      if (value !== undefined && value !== null && value !== '') {
+        params.append(key, value.toString());
+      }
+    });
+    const queryString = params.toString();
+    return this.makeRequest(`/call-logs${queryString ? `?${queryString}` : ''}`);
+  }
+
+  async getCallLogById(callLogId: string): Promise<any> {
+    return this.makeRequest(`/call-logs/${encodeURIComponent(callLogId)}`);
+  }
+
+  async createCallLog(payload: {
+    clientName: string;
+    clientPhone: string;
+    callDirection: 'inbound' | 'outbound';
+    callDate: string;
+    callTime: string;
+    callDuration: number;
+    callOutcome: 'no_answer' | 'interested' | 'follow_up_needed' | 'not_interested' | 'sale_closed';
+    year: number;
+    month: number;
+    week: number;
+    nextAction?: string;
+    followUpDate?: string;
+    callNotes?: string;
+    tags?: string[];
+    relatedLead?: string;
+    relatedVisit?: string;
+  }): Promise<any> {
+    return this.makeRequest(`/call-logs`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  }
+
+  async updateCallLog(callLogId: string, payload: Record<string, any>): Promise<any> {
+    return this.makeRequest(`/call-logs/${encodeURIComponent(callLogId)}`, {
+      method: "PUT",
+      body: JSON.stringify(payload),
+    });
+  }
+
+  async deleteCallLog(callLogId: string): Promise<any> {
+    return this.makeRequest(`/call-logs/${encodeURIComponent(callLogId)}`, {
+      method: "DELETE",
+    });
+  }
+
+  async getCallLogFolderTree(userId?: string): Promise<any> {
+    const params = userId ? `?userId=${encodeURIComponent(userId)}` : '';
+    return this.makeRequest(`/call-logs/folder-tree${params}`);
+  }
+
+  async getCallLogStatistics(filters: {
+    year?: number;
+    month?: number;
+    week?: number;
+    userId?: string;
+  } = {}): Promise<any> {
+    const params = new URLSearchParams();
+    Object.entries(filters).forEach(([key, value]) => {
+      if (value !== undefined && value !== null && value !== '') {
+        params.append(key, value.toString());
+      }
+    });
+    const queryString = params.toString();
+    return this.makeRequest(`/call-logs/statistics${queryString ? `?${queryString}` : ''}`);
+  }
+
+  async getCallLogFollowUps(days: number = 7): Promise<any> {
+    return this.makeRequest(`/call-logs/follow-ups?days=${days}`);
+  }
+
+  // Admin call log endpoints
+  async getAdminCallLogs(filters: any = {}): Promise<any> {
+    const params = new URLSearchParams();
+    Object.entries(filters).forEach(([key, value]) => {
+      if (value !== undefined && value !== null && value !== '') {
+        params.append(key, value.toString());
+      }
+    });
+    const queryString = params.toString();
+    return this.makeRequest(`/admin/call-logs${queryString ? `?${queryString}` : ''}`);
+  }
+
+  async getAdminCallLogFolderTree(userId?: string): Promise<any> {
+    const params = userId ? `?userId=${encodeURIComponent(userId)}` : '';
+    return this.makeRequest(`/admin/call-logs/folder-tree${params}`);
+  }
+
+  async getAdminCallLogStatistics(filters: any = {}): Promise<any> {
+    const params = new URLSearchParams();
+    Object.entries(filters).forEach(([key, value]) => {
+      if (value !== undefined && value !== null && value !== '') {
+        params.append(key, value.toString());
+      }
+    });
+    const queryString = params.toString();
+    return this.makeRequest(`/admin/call-logs/statistics${queryString ? `?${queryString}` : ''}`);
   }
 }
 

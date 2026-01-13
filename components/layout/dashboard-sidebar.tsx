@@ -23,7 +23,8 @@ import {
   LogOut,
   Star,
   CalendarCheck,
-  Package
+  Package,
+  Phone
 } from "lucide-react";
 
 interface DashboardSidebarProps {
@@ -43,12 +44,14 @@ export function DashboardSidebar({ currentPage = "dashboard", onPageChange }: Da
   }, [currentUser]);
 
   const handleNavigation = (path: string) => {
+    // Always navigate using router
+    router.push(path);
+    
+    // Also update state if callback is provided
     if (onPageChange) {
       // Strip /dashboard/ prefix for state-based navigation
       const pageName = path.replace('/dashboard/', '').replace('/dashboard', 'dashboard');
       onPageChange(pageName);
-    } else {
-      router.push(path);
     }
   };
 
@@ -124,6 +127,13 @@ export function DashboardSidebar({ currentPage = "dashboard", onPageChange }: Da
       path: "/dashboard/consumables",
       color: "text-cyan-600",
       bgColor: "bg-cyan-50"
+    },
+    {
+      icon: Phone,
+      label: "Telesales",
+      path: "/dashboard/telesales",
+      color: "text-red-600",
+      bgColor: "bg-red-50"
     },
     {
       icon: Users,
