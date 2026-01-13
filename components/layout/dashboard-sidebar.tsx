@@ -151,20 +151,11 @@ export function DashboardSidebar({ currentPage = "dashboard", onPageChange }: Da
     },
   ];
 
-  // Add Sales Heatmap if user has permission
-  if (canViewHeatmap(currentUser)) {
-    quickActions.unshift({
-      icon: MapPin,
-      label: "Heatmap",
-      path: "/dashboard/sales-heatmap",
-      color: "text-blue-600",
-      bgColor: "bg-blue-50"
-    });
-  }
+  // Sales Heatmap intentionally hidden in admin sidebar (feature removed from slider menu)
 
   const favorites = [
     { icon: Star, label: "Top Customers", path: "/dashboard/customers" },
-    { icon: Clock, label: "Visits", path: "/dashboard/visits" },
+    // Visits removed from sidebar per request
     { icon: MapPin, label: "Trails", path: "/dashboard/trails" },
   ];
 

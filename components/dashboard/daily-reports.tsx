@@ -27,6 +27,7 @@ import {
   DollarSign
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { apiService } from "@/lib/api";
 
 interface Contact {
   name: string;
@@ -99,36 +100,16 @@ export default function DailyReports() {
   const { data, isLoading, error, refetch } = useQuery<ApiResponse>({
     queryKey: ["dailyReports", selectedDate, regionFilter, outcomeFilter, currentPage],
     queryFn: async () => {
-      if (typeof window === 'undefined') return null;
-      
-      const token = localStorage.getItem("accessToken");
-      const params = new URLSearchParams({
-        page: currentPage.toString(),
-        limit: "20",
-      });
+      // Use centralized apiService which respects NEXT_PUBLIC_API_BASE_URL and local dev hosts
+      const params: any = {
+        page: currentPage,
+        limit: 20,
+      };
+      if (selectedDate) params.date = selectedDate;
+      if (regionFilter !== "all") params.region = regionFilter;
+      if (outcomeFilter !== "all") params.outcome = outcomeFilter;
 
-      // Only add date filter if a date is selected
-      if (selectedDate) params.append("date", selectedDate);
-      if (regionFilter !== "all") params.append("region", regionFilter);
-      if (outcomeFilter !== "all") params.append("outcome", outcomeFilter);
-
-      const response = await fetch(
-        `https://app.codewithseth.co.ke/api/admin/visits/daily/activities?${params.toString()}`,
-        {
-          headers: {
-            "Content-Type": "application/json",
-            ...(token ? { Authorization: `Bearer ${token}` } : {}),
-          },
-        }
-      );
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error("API Error:", errorText);
-        throw new Error(`Failed to fetch daily reports: ${response.status}`);
-      }
-
-      const result = await response.json();
+      const result = await apiService.getAdminDailyActivities(params as any);
       return result;
     },
     enabled: typeof window !== 'undefined',

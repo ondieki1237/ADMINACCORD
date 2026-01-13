@@ -1,4 +1,5 @@
 import { authService } from "./auth"
+import type { Visit } from "./types/visits"
 
 // Determine API base URL:
 // Priority: NEXT_PUBLIC_API_BASE_URL env var (useful for local override)
@@ -294,6 +295,54 @@ class ApiService {
     if (endDate) params.append("endDate", endDate)
 
     return this.makeRequest(`/visits?${params.toString()}`)
+  }
+
+  // ==================== Admin Visits (read-only) ====================
+
+  async getAdminVisitsByUser(userId: string, options: {
+    page?: number
+    limit?: number
+    startDate?: string
+    endDate?: string
+    clientName?: string
+    contactName?: string
+    outcome?: string
+    tag?: string
+    sort?: string
+  } = {}): Promise<any> {
+    const params = new URLSearchParams({
+      page: String(options.page ?? 1),
+      limit: String(options.limit ?? 25),
+    })
+    if (options.startDate) params.append("startDate", options.startDate)
+    if (options.endDate) params.append("endDate", options.endDate)
+    if (options.clientName) params.append("clientName", options.clientName)
+    if (options.contactName) params.append("contactName", options.contactName)
+    if (options.outcome) params.append("outcome", options.outcome)
+    if (options.tag) params.append("tag", options.tag)
+    if (options.sort) params.append("sort", options.sort)
+
+    return this.makeRequest(`/admin/visits/user/${encodeURIComponent(userId)}?${params.toString()}`)
+  }
+
+  async getAdminVisitsSummary(limit = 50): Promise<any> {
+    return this.makeRequest(`/admin/visits/summary?limit=${encodeURIComponent(String(limit))}`)
+  }
+
+  async getAdminVisitById(visitId: string): Promise<any> {
+    return this.makeRequest(`/admin/visits/${encodeURIComponent(visitId)}`)
+  }
+
+  async getAdminDailyActivities(params: { date?: string; page?: number; limit?: number; region?: string; userId?: string; outcome?: string } = {}): Promise<any> {
+    const q = new URLSearchParams()
+    if (params.date) q.append('date', params.date)
+    if (params.page) q.append('page', String(params.page ?? 1))
+    if (params.limit) q.append('limit', String(params.limit ?? 50))
+    if (params.region) q.append('region', params.region)
+    if (params.userId) q.append('userId', params.userId)
+    if (params.outcome) q.append('outcome', params.outcome)
+
+    return this.makeRequest(`/admin/visits/daily/activities?${q.toString()}`)
   }
 
   async createTrail(trailData: Omit<Trail, "id">): Promise<Trail> {

@@ -18,7 +18,7 @@ export function MobileNav({ currentPage, onPageChange }: MobileNavProps) {
 
   const navItems = [
     { id: "dashboard", label: "Dashboard", icon: Home },
-    { id: "visits", label: "Visits", icon: Users },
+    // Visits removed from mobile nav (hidden)
     { id: "trails", label: "Trails", icon: MapPin },
     { id: "follow-ups", label: "Follow-Ups", icon: TrendingUp },
     { id: "profile", label: "Profile", icon: User },

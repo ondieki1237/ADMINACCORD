@@ -398,6 +398,7 @@ Existing Documentation:
 ├─ README.md (overview & setup)
 ├─ ADMIN_PANEL_REQUIREMENTS.md (feature specs)
 ├─ docs/ (50+ feature docs)
+├─ docs/VISITS_API.md (Admin visits API reference)
 └─ ... (other docs)
 ```
 
