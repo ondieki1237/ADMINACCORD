@@ -95,6 +95,9 @@ export default function DailyReports() {
   const [searchQuery, setSearchQuery] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const { toast } = useToast();
+  const [exportStartDate, setExportStartDate] = useState<string>("");
+  const [exportEndDate, setExportEndDate] = useState<string>("");
+  const [isExporting, setIsExporting] = useState<boolean>(false);
 
   // Fetch daily visits
   const { data, isLoading, error, refetch } = useQuery<ApiResponse>({
@@ -122,6 +125,101 @@ export default function DailyReports() {
       title: "Refreshed",
       description: "Daily reports data has been updated",
     });
+  };
+
+  const handleExportCSV = async () => {
+    try {
+      // Determine date range for export
+      let start = exportStartDate;
+      let end = exportEndDate;
+      if (!start && !end && selectedDate) {
+        start = selectedDate;
+        end = selectedDate;
+      }
+      if (!start && !end) {
+        toast({ title: "Date range required", description: "Please select a start or end date (or choose a single date).", variant: 'destructive' as any });
+        return;
+      }
+
+      setIsExporting(true);
+
+      const filters: any = {
+        page: 1,
+        limit: 10000,
+      };
+      if (start) filters.startDate = start;
+      if (end) filters.endDate = end;
+
+      const resp = await apiService.getAdminVisits(filters);
+      const visits: Visit[] = resp?.data || [];
+
+      // CSV header
+      const header = [
+        'Visit ID',
+        'Date',
+        'User FirstName',
+        'User LastName',
+        'EmployeeId',
+        'Region',
+        'Client Name',
+        'Client Location',
+        'Contacts',
+        'Outcome',
+        'Duration',
+        'PotentialValue',
+        'Notes',
+        'Tags',
+        'Created At'
+      ];
+
+      const escape = (v: any) => {
+        if (v === undefined || v === null) return '';
+        const s = String(v);
+        return `"${s.replace(/"/g, '""')}"`;
+      };
+
+      const rows = visits.map((v) => {
+        const contacts = (v.contacts || []).map(c => `${c.name || ''} (${c.position || ''}) ${c.phone || ''}`).join('; ');
+        const tags = (v.tags || []).join('; ');
+        return [
+          escape(v._id),
+          escape(v.date),
+          escape(v.userId?.firstName),
+          escape(v.userId?.lastName),
+          escape((v.userId as any)?.employeeId),
+          escape((v.userId as any)?.region),
+          escape(v.client?.name),
+          escape(v.client?.location),
+          escape(contacts),
+          escape(v.visitOutcome),
+          escape(v.duration),
+          escape((v as any).totalPotentialValue),
+          escape(v.notes),
+          escape(tags),
+          escape(v.createdAt),
+        ].join(',');
+      });
+
+      const csv = [header.join(','), ...rows].join('\n');
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      const startLabel = start ? start.replace(/-/g, '') : 'start';
+      const endLabel = end ? end.replace(/-/g, '') : 'end';
+      a.href = url;
+      a.download = `daily-visits-${startLabel}-${endLabel}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+
+      toast({ title: 'Export complete', description: `Exported ${visits.length} visits` });
+    } catch (err: any) {
+      console.error('Export error', err);
+      toast({ title: 'Export failed', description: err?.message || 'An error occurred', variant: 'destructive' as any });
+    } finally {
+      setIsExporting(false);
+    }
   };
 
   const getOutcomeBadgeColor = (outcome: string) => {
@@ -210,10 +308,30 @@ export default function DailyReports() {
             </h1>
             <p className="text-gray-600 mt-1">Sales team visit activities and performance</p>
           </div>
-          <Button onClick={handleRefresh} variant="outline" className="gap-2">
-            <RefreshCw className="h-4 w-4" />
-            Refresh
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button onClick={handleRefresh} variant="outline" className="gap-2">
+              <RefreshCw className="h-4 w-4" />
+              Refresh
+            </Button>
+            <div className="flex items-center gap-2">
+              <label className="text-sm">From</label>
+              <Input type="date" value={exportStartDate} onChange={(e) => setExportStartDate(e.target.value)} />
+              <label className="text-sm">To</label>
+              <Input type="date" value={exportEndDate} onChange={(e) => setExportEndDate(e.target.value)} />
+              <Button
+                onClick={async () => {
+                  // export handler (defined below)
+                  await handleExportCSV();
+                }}
+                variant="secondary"
+                className="gap-2"
+                disabled={isExporting}
+              >
+                <Download className="h-4 w-4" />
+                {isExporting ? "Exporting..." : "Export CSV"}
+              </Button>
+            </div>
+          </div>
         </div>
 
         {/* Summary Cards */}
@@ -485,3 +603,5 @@ export default function DailyReports() {
     </div>
   );
 }
+
+// (Export implemented inside the component.)

@@ -345,6 +345,30 @@ class ApiService {
     return this.makeRequest(`/admin/visits/daily/activities?${q.toString()}`)
   }
 
+  // General admin visits listing (supports startDate/endDate filters)
+  async getAdminVisits(filters: {
+    page?: number;
+    limit?: number;
+    startDate?: string;
+    endDate?: string;
+    clientName?: string;
+    contactName?: string;
+    outcome?: string;
+    tag?: string;
+    sort?: string;
+    userId?: string;
+    region?: string;
+  } = {}): Promise<any> {
+    const params = new URLSearchParams();
+    Object.entries(filters).forEach(([key, value]) => {
+      if (value !== undefined && value !== null && value !== '') {
+        params.append(key, String(value));
+      }
+    });
+    const queryString = params.toString();
+    return this.makeRequest(`/admin/visits${queryString ? `?${queryString}` : ''}`);
+  }
+
   async createTrail(trailData: Omit<Trail, "id">): Promise<Trail> {
     return this.makeRequest("/trails", {
       method: "POST",
