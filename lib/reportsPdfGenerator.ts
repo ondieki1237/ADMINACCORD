@@ -580,6 +580,20 @@ export async function generateIndividualReportPDF(
     const reportSplit = doc.splitTextToSize(report.report, pageWidth - 30);
     doc.text(reportSplit, 15, yPos);
     yPos += (reportSplit.length * 4) + 10;
+  } else if (report.weeklySummary && report.weeklySummary.trim()) {
+    // Fallback for weeklySummary
+    doc.setFontSize(12);
+    doc.setTextColor(COLORS.primary);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Weekly Summary', 15, yPos);
+    yPos += 5;
+
+    doc.setFontSize(9);
+    doc.setTextColor(COLORS.text);
+    doc.setFont('helvetica', 'normal');
+    const summarySplit = doc.splitTextToSize(report.weeklySummary, pageWidth - 30);
+    doc.text(summarySplit, 15, yPos);
+    yPos += (summarySplit.length * 4) + 10;
   }
 
   // Customer Visits Table (Structured)
@@ -1293,6 +1307,29 @@ export async function generateDetailedReportPDF(
         yPos = 20;
       }
       doc.text(reportSplit[i], 20, yPos);
+      yPos += 4;
+    }
+  } else if (report.weeklySummary && report.weeklySummary.trim()) {
+    doc.setFillColor(COLORS.lightGray);
+    doc.roundedRect(15, yPos, pageWidth - 30, 8, 2, 2, 'F');
+
+    doc.setFontSize(11);
+    doc.setTextColor(COLORS.primary);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Weekly Summary', 20, yPos + 6);
+
+    yPos += 12;
+    doc.setFontSize(9);
+    doc.setTextColor(COLORS.text);
+    doc.setFont('helvetica', 'normal');
+    const summarySplit = doc.splitTextToSize(report.weeklySummary, pageWidth - 40);
+
+    for (let i = 0; i < summarySplit.length; i++) {
+      if (yPos + 5 > pageHeight - 20) {
+        doc.addPage();
+        yPos = 20;
+      }
+      doc.text(summarySplit[i], 20, yPos);
       yPos += 4;
     }
   }

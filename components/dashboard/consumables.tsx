@@ -33,7 +33,7 @@ interface Consumable {
   category: string
   name: string
   price: number
-  unit: string
+  unit?: string
   description?: string
   isActive: boolean
   createdAt?: string
@@ -41,14 +41,14 @@ interface Consumable {
 }
 
 interface ConsumablesResponse {
-  data: {
-    docs: Consumable[]
-    pagination: {
-      total: number
-      pages: number
-      currentPage: number
-    }
+  success: boolean
+  count: number
+  pagination: {
+    total: number
+    page: number
+    pages: number
   }
+  data: Consumable[]
 }
 
 export default function ConsumablesList() {
@@ -184,7 +184,7 @@ export default function ConsumablesList() {
       category: consumable.category,
       name: consumable.name,
       price: consumable.price.toString(),
-      unit: consumable.unit,
+      unit: consumable.unit || "",
       description: consumable.description || "",
     })
     setIsDialogOpen(true)
@@ -198,7 +198,7 @@ export default function ConsumablesList() {
 
   const handleSave = async () => {
     // Validation
-    if (!formData.category || !formData.name || !formData.price || !formData.unit) {
+    if (!formData.category || !formData.name || !formData.price) {
       toast({
         title: "Error",
         description: "Please fill in all required fields",
@@ -211,7 +211,7 @@ export default function ConsumablesList() {
       category: formData.category,
       name: formData.name,
       price: parseFloat(formData.price),
-      unit: formData.unit,
+      unit: formData.unit || "piece", // Default unit if not provided
       ...(formData.description && { description: formData.description }),
     }
 
@@ -228,8 +228,9 @@ export default function ConsumablesList() {
     }
   }
 
-  const consumables = data?.data?.docs || []
-  const pagination = data?.data?.pagination || { total: 0, pages: 0, currentPage: 1 }
+  console.log("RENDER DATA DEBUG:", data);
+  const consumables = data?.data || []
+  const pagination = data?.pagination || { total: 0, page: 1, pages: 1 }
   const categories = Array.from(
     new Set(consumables.map((c) => c.category))
   ) as string[]
@@ -483,7 +484,7 @@ export default function ConsumablesList() {
                 {/* Pagination */}
                 <div className="flex items-center justify-between mt-6 pt-4 border-t border-border">
                   <div className="text-sm text-muted-foreground">
-                    Page {pagination.currentPage} of {pagination.pages}
+                    Page {pagination.page} of {pagination.pages}
                   </div>
                   <div className="flex gap-2">
                     <Button
@@ -551,6 +552,7 @@ export default function ConsumablesList() {
                 className="w-full px-3 py-2 border border-input rounded-md bg-background text-foreground"
               >
                 <option value="">Select Category</option>
+                <option value="laboratory">Laboratory</option>
                 <option value="Thyroid Function">Thyroid Function</option>
                 <option value="Cardiac Markers">Cardiac Markers</option>
                 <option value="Blood Tests">Blood Tests</option>
@@ -589,6 +591,7 @@ export default function ConsumablesList() {
                 className="w-full px-3 py-2 border border-input rounded-md bg-background text-foreground"
               >
                 <option value="">Select Unit</option>
+                <option value="piece">Piece</option>
                 <option value="kit">Kit</option>
                 <option value="box">Box</option>
                 <option value="bottle">Bottle</option>

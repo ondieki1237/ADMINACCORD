@@ -46,7 +46,7 @@ export function DashboardSidebar({ currentPage = "dashboard", onPageChange }: Da
   const handleNavigation = (path: string) => {
     // Always navigate using router
     router.push(path);
-    
+
     // Also update state if callback is provided
     if (onPageChange) {
       // Strip /dashboard/ prefix for state-based navigation
@@ -153,11 +153,7 @@ export function DashboardSidebar({ currentPage = "dashboard", onPageChange }: Da
 
   // Sales Heatmap intentionally hidden in admin sidebar (feature removed from slider menu)
 
-  const favorites = [
-    { icon: Star, label: "Top Customers", path: "/dashboard/customers" },
-    // Visits removed from sidebar per request
-    { icon: MapPin, label: "Trails", path: "/dashboard/trails" },
-  ];
+  const favorites: { icon: any; label: string; path: string }[] = [];
 
   return (
     <aside
@@ -230,8 +226,8 @@ export function DashboardSidebar({ currentPage = "dashboard", onPageChange }: Da
                     key={item.path}
                     onClick={() => handleNavigation(item.path)}
                     className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200 group ${isActive
-                        ? `${item.bgColor} ${item.color} shadow-sm`
-                        : "text-gray-600 hover:bg-gray-50"
+                      ? `${item.bgColor} ${item.color} shadow-sm`
+                      : "text-gray-600 hover:bg-gray-50"
                       }`}
                   >
                     <div className={`flex-shrink-0 ${isCollapsed ? "mx-auto" : ""}`}>
@@ -266,8 +262,8 @@ export function DashboardSidebar({ currentPage = "dashboard", onPageChange }: Da
                     key={item.path}
                     onClick={() => handleNavigation(item.path)}
                     className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200 group ${isActive
-                        ? `${item.bgColor} ${item.color} shadow-sm`
-                        : "text-gray-600 hover:bg-gray-50"
+                      ? `${item.bgColor} ${item.color} shadow-sm`
+                      : "text-gray-600 hover:bg-gray-50"
                       }`}
                   >
                     <div className={`flex-shrink-0 ${isCollapsed ? "mx-auto" : ""}`}>
@@ -283,7 +279,7 @@ export function DashboardSidebar({ currentPage = "dashboard", onPageChange }: Da
           </div>
 
           {/* Favorites */}
-          {!isCollapsed && (
+          {!isCollapsed && favorites.length > 0 && (
             <div className="px-3">
               <p className="px-3 text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">
                 Favorites
@@ -314,8 +310,8 @@ export function DashboardSidebar({ currentPage = "dashboard", onPageChange }: Da
             variant="ghost"
             onClick={handleLogout}
             className={`w-full ${isCollapsed
-                ? "p-2 justify-center"
-                : "justify-start gap-3"
+              ? "p-2 justify-center"
+              : "justify-start gap-3"
               } text-gray-600 hover:text-red-600 hover:bg-red-50`}
           >
             <LogOut className="h-5 w-5" />
