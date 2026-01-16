@@ -67,14 +67,14 @@ class ApiService {
   private async makeRequest(endpoint: string, options: RequestInit = {}) {
     let token = authService.getAccessToken();
     const fullUrl = `${API_BASE_URL}${endpoint}`;
-    
+
     console.log("🌐 API Request:", {
       url: fullUrl,
       method: options.method || 'GET',
       hasToken: !!token,
       endpoint
     });
-    
+
     let response = await fetch(fullUrl, {
       ...options,
       headers: {
@@ -516,19 +516,19 @@ class ApiService {
 
   // Leads endpoints
   async getLeads(page = 1, limit = 20, filters: Record<string, any> = {}, useAdminEndpoint = false): Promise<any> {
-    const params = new URLSearchParams({ 
-      page: String(page), 
+    const params = new URLSearchParams({
+      page: String(page),
       limit: String(limit),
       _t: String(Date.now()) // Cache buster
     });
     Object.entries(filters).forEach(([k, v]) => {
       if (v !== undefined && v !== null && v !== "") params.set(k, String(v));
     });
-    
+
     // Use admin endpoint if user has admin access
     const endpoint = useAdminEndpoint ? `/admin/leads` : `/leads`;
     console.log(`📡 Using ${useAdminEndpoint ? 'ADMIN' : 'USER'} endpoint: ${endpoint}`);
-    
+
     return this.makeRequest(`${endpoint}?${params.toString()}`, {
       headers: {
         'Cache-Control': 'no-cache, no-store, must-revalidate',
@@ -565,8 +565,8 @@ class ApiService {
 
   // Machines endpoints (admin)
   async getMachines(page = 1, limit = 20, filters: Record<string, any> = {}): Promise<any> {
-    const params = new URLSearchParams({ 
-      page: String(page), 
+    const params = new URLSearchParams({
+      page: String(page),
       limit: String(limit),
       _t: String(Date.now())
     });
@@ -613,8 +613,8 @@ class ApiService {
 
   // Consumables endpoints
   async getConsumables(page = 1, limit = 20, filters: Record<string, any> = {}): Promise<any> {
-    const params = new URLSearchParams({ 
-      page: String(page), 
+    const params = new URLSearchParams({
+      page: String(page),
       limit: String(limit),
       _t: String(Date.now()) // Cache buster
     });
@@ -777,6 +777,9 @@ class ApiService {
     });
     const queryString = params.toString();
     return this.makeRequest(`/admin/call-logs/statistics${queryString ? `?${queryString}` : ''}`);
+  }
+  async getVisitContactsMapped(visitId: string): Promise<any> {
+    return this.makeRequest(`/visits/${encodeURIComponent(visitId)}/contacts-mapped`);
   }
 }
 

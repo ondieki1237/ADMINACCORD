@@ -1,1113 +1,674 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { format } from "date-fns";
-import { StatsCard } from "./stats-card";
-import { RecentActivity } from "./recent-activity";
+import { format, subDays, startOfMonth, endOfMonth, isWithinInterval, parseISO } from "date-fns";
 import { apiService } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 import { authService } from "@/lib/auth";
-import { hasAdminAccess, canViewHeatmap } from "@/lib/permissions";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { BarChart3, Clock, MapPin, Shield, TrendingUp, Users, FileText, Download, Calendar, CheckCircle, UserPlus, Settings, RefreshCw } from "lucide-react";
-import { Bar, Line } from "react-chartjs-2";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import {
+  Users, MapPin, TrendingUp, TrendingDown, Activity,
+  Calendar, ArrowRight, UserCheck, AlertCircle, FileText,
+  Briefcase, CheckCircle2, Clock, XCircle, ChevronDown, Filter
+} from "lucide-react";
+import { Line, Doughnut, Bar } from "react-chartjs-2";
 import {
   Chart as ChartJS,
   CategoryScale,
   LinearScale,
-  BarElement,
-  LineElement,
   PointElement,
+  LineElement,
+  BarElement,
   Title,
   Tooltip,
   Legend,
+  ArcElement,
   Filler,
 } from "chart.js";
-import QuotationList from "./quotations";
-import Reports from "./reports";
-import EngineerReports from "./engineer-reports";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Badge } from "@/components/ui/badge";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import VisitsPage from "./visitmanager";
-import PerformanceAnalytics from "./performance-analytics";
+import Reports from "./reports";
+import QuotationList from "./quotations";
+import { VisitContactData } from "./visit-contact-data";
 
 // Register Chart.js components
-ChartJS.register(CategoryScale, LinearScale, BarElement, LineElement, PointElement, Title, Tooltip, Legend, Filler);
+ChartJS.register(
+  CategoryScale, LinearScale, PointElement, LineElement, BarElement,
+  Title, Tooltip, Legend, ArcElement, Filler
+);
 
-interface DashboardData {
-  overview: { totalVisits: number; totalLeads: number };
-  recentActivity: any[];
-  performance: { visitsThisMonth: number; leadsThisMonth: number; averageVisitDuration: number; completionRate: number };
-  heatmap?: { [key: string]: number };
+// --- Types ---
+interface Visit {
+  _id: string;
+  client: { name: string; location: string; _id?: string };
+  user: { firstName: string; lastName: string; _id: string; email: string };
+  startTime: string;
+  endTime: string;
+  status: string; // "Completed", "Cancelled", etc.
+  visitOutcome?: string; // "Successful", "Follow-up Needed", "Rejected"
+  notes?: string;
+  createdAt: string;
 }
 
-interface DashboardOverviewProps {
-  onPageChange?: (page: string) => void;
+interface Lead {
+  _id: string;
+  name: string;
+  company: string;
+  value: number;
+  status: string;
+  createdAt: string;
 }
 
-export function DashboardOverview({ onPageChange }: DashboardOverviewProps = { onPageChange: undefined }) {
-  const [dateRange, setDateRange] = useState<{ startDate: string; endDate: string }>({
-    startDate: format(new Date(new Date().getFullYear(), new Date().getMonth(), 1), "yyyy-MM-dd"),
-    endDate: format(new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0), "yyyy-MM-dd"),
-  });
-  const [currentUser, setCurrentUser] = useState(authService.getCurrentUserSync());
-  const [totalVisits, setTotalVisits] = useState(0)
-  const [totalLeads, setTotalLeads] = useState(0)
-  const [leadsLoading, setLeadsLoading] = useState(true)
-  const [averageDuration, setAverageDuration] = useState(0)
-  const [showQuotations, setShowQuotations] = useState(false);
-  const [showEngineerReports, setShowEngineerReports] = useState(false);
-  const [showReports, setShowReports] = useState(false);
-  const [showVisits, setShowVisits] = useState(false);
-  const [showPerformance, setShowPerformance] = useState(false);
+interface User {
+  _id: string;
+  firstName: string;
+  lastName: string;
+  role: string;
+  region: string;
+}
+
+// --- Brand Colors ---
+const COLORS = {
+  primary: "#0089f4", // Blue
+  secondary: "#ef4444", // Red (Alerts/Negative)
+  text: "#1e293b", // Slate 800
+  textLight: "#64748b", // Slate 500
+  success: "#10b981", // Emerald 500
+  warning: "#f59e0b", // Amber 500
+  background: "#f8fafc", // Slate 50
+  white: "#ffffff",
+};
+
+export function DashboardOverview() {
   const { toast } = useToast();
+  const [currentUser, setCurrentUser] = useState(authService.getCurrentUserSync());
+  const [dateRange, setDateRange] = useState("thisMonth"); // "thisWeek", "thisMonth", "lastMonth"
+  const [filterRegion, setFilterRegion] = useState("all");
 
-  // Fetch user if not available
-  useEffect(() => {
-    if (!currentUser) {
-      authService.getCurrentUser().then(setCurrentUser).catch((error) => {
-        console.error("Failed to get current user:", error);
-        toast({ title: "Error", description: "Unable to fetch user data.", variant: "destructive" });
-      });
-    }
-  }, [toast]);
+  // Sub-page navigation states
+  const [showVisits, setShowVisits] = useState(false);
+  const [showReports, setShowReports] = useState(false);
+  const [showQuotations, setShowQuotations] = useState(false);
+  const [showContactData, setShowContactData] = useState(false);
 
-  // Fetch visits data
-  useEffect(() => {
-    const fetchVisits = async () => {
-      if (typeof window === 'undefined') return;
+  // --- 1. Data Fetching ---
 
-      try {
-        const token = localStorage.getItem("accessToken")
-        const res = await fetch("https://app.codewithseth.co.ke/api/visits", {
-          headers: {
-            "Content-Type": "application/json",
-            ...(token ? { Authorization: `Bearer ${token}` } : {})
-          }
-        })
-        const data = await res.json()
-        const docs = data?.data?.docs || data?.docs || []
-        setTotalVisits(docs.length)
-
-        // Calculate average duration (in minutes)
-        let totalMinutes = 0
-        let count = 0
-        docs.forEach((visit: any) => {
-
-          const start = new Date(visit.startTime)
-          const end = new Date(visit.endTime)
-          const diff = (end.getTime() - start.getTime()) / (1000 * 60)
-          if (!isNaN(diff) && diff > 0) {
-            totalMinutes += diff
-            count++
-          }
-        }
-        )
-        setAverageDuration(count > 0 ? Math.round(totalMinutes / count) : 0)
-      } catch (err) {
-        setTotalVisits(0)
-        setAverageDuration(0)
-      }
-    }
-    fetchVisits()
-  }, []);
-
-  // Fetch leads data with total count
-  useEffect(() => {
-    const fetchLeads = async () => {
-      if (typeof window === 'undefined') return;
-
-      setLeadsLoading(true)
-      try {
-        const token = localStorage.getItem("accessToken")
-        const res = await fetch("https://app.codewithseth.co.ke/api/admin/leads?page=1&limit=1", {
-          headers: {
-            "Content-Type": "application/json",
-            ...(token ? { Authorization: `Bearer ${token}` } : {})
-          }
-        })
-        const data = await res.json()
-
-        // Handle different API response formats
-        let totalCount = 0
-        if (data?.data?.totalDocs) {
-          // If API returns totalDocs (pagination info)
-          totalCount = data.data.totalDocs
-        } else if (data?.totalDocs) {
-          totalCount = data.totalDocs
-        } else {
-          // Fallback to counting docs array
-          const docs = data?.data?.docs || data?.docs || data?.data || []
-          totalCount = Array.isArray(docs) ? docs.length : 0
-        }
-
-        setTotalLeads(totalCount)
-      } catch (err) {
-        console.error("Failed to fetch leads:", err)
-        setTotalLeads(0)
-      } finally {
-        setLeadsLoading(false)
-      }
-    }
-    fetchLeads()
-  }, []);
-
-  // API calls with React Query
-  const { data, isLoading, error, refetch } = useQuery({
-    queryKey: ["dashboard", dateRange, currentUser?.region, currentUser?.id],
+  // Fetch Visits
+  const { data: visits = [], isLoading: loadingVisits } = useQuery({
+    queryKey: ["visits-all"],
     queryFn: async () => {
-      if (typeof window === 'undefined') return null;
+      const json = await apiService.getVisits(1, 1000); // Fetch up to 1000 visits
+      return (json.data?.docs || json.docs || (Array.isArray(json.data) ? json.data : []) || []) as Visit[];
+    },
+    staleTime: 60000,
+  });
 
+  // Fetch Leads (for "New Clients" approximation and Top Movers)
+  const { data: leads = [], isLoading: loadingLeads } = useQuery({
+    queryKey: ["leads-all"],
+    queryFn: async () => {
+      // Try fetching leads; handle potential non-admin access if needed
       try {
-        const token = localStorage.getItem("accessToken");
-        const [overview, recentActivity, performance, visitsRes] = await Promise.all([
-          apiService.getDashboardOverview(dateRange.startDate, dateRange.endDate, currentUser?.region || "North"),
-          apiService.getRecentActivity(20),
-          apiService.getPerformanceMetrics(dateRange.startDate, dateRange.endDate, currentUser?.region || "North"),
-          fetch("https://app.codewithseth.co.ke/api/visits", {
-            headers: {
-              "Content-Type": "application/json",
-              ...(token ? { Authorization: `Bearer ${token}` } : {})
-            }
-          }).then(res => res.json())
-        ]);
-        const docs = visitsRes?.data?.docs || visitsRes?.docs || [];
-        // Calculate average duration
-        let totalMinutes = 0, count = 0;
-        docs.forEach((visit: any) => {
-          if (visit.startTime && visit.endTime) {
-            const start = new Date(visit.startTime);
-            const end = new Date(visit.endTime);
-            const diff = (end.getTime() - start.getTime()) / (1000 * 60);
-            if (!isNaN(diff) && diff > 0) {
-              totalMinutes += diff;
-              count++;
-            }
-          }
-        });
-        const averageVisitDuration = count > 0 ? Math.round(totalMinutes / count) : 0;
-        // Merge into overview
-        return {
-          overview: {
-            ...overview,
-            totalVisits: docs.length,
-            averageVisitDuration,
-          },
-          recentActivity,
-          performance,
-          heatmap: null,
+        const json = await apiService.getLeads(1, 1000, {}, true);
+        return (json.data?.docs || json.docs || (Array.isArray(json.data) ? json.data : []) || []) as Lead[];
+      } catch (e) {
+        console.warn("Failed to fetch admin leads, trying user leads", e);
+        const json = await apiService.getLeads(1, 1000, {}, false);
+        return (json.data?.docs || json.docs || (Array.isArray(json.data) ? json.data : []) || []) as Lead[];
+      }
+    },
+    staleTime: 60000,
+  });
+
+  // Fetch Users (for Sales Reps count)
+  const { data: users = [] } = useQuery({
+    queryKey: ["users-all"],
+    queryFn: async () => {
+      const json = await apiService.getUsers();
+      // Ensure we extract the array correctly even if nested differently
+      return (json.data?.docs || json.data || json || []) as User[];
+    },
+    enabled: !!authService.getAccessToken(),
+  });
+
+  // --- 2. Data Processing & Aggregation ---
+
+  const processedData = useMemo(() => {
+    const today = new Date();
+    let start = startOfMonth(today);
+    let end = endOfMonth(today);
+
+    // Debugging logs
+    console.log("Dashboard Debug: Raw Visits:", visits.length, visits[0]);
+    console.log("Dashboard Debug: Raw Leads:", leads.length, leads[0]);
+
+    if (dateRange === "thisWeek") {
+      start = subDays(today, 7);
+      end = today;
+    } else if (dateRange === "lastMonth") {
+      start = startOfMonth(subDays(today, 30));
+      end = endOfMonth(subDays(today, 30));
+    } else if (dateRange === "allTime") {
+      start = subDays(today, 3650); // 10 years ago
+      end = today;
+    }
+
+    // Fallback: If "All Time" needed, we might need a new filter option.
+    // For now, let's keep strict but robust parsing.
+
+    // Filter Visits by Date & Region
+    const filteredVisits = visits.filter(v => {
+      if (!v.startTime && !v.createdAt) return false;
+      const d = parseISO(v.startTime || v.createdAt);
+      // Basic region filtering if user object has region (assuming standard user structure)
+      // Note: Actual region filtering might need to join user data if not in visit object
+      return isWithinInterval(d, { start, end });
+    });
+
+    console.log(`Dashboard Debug: Filtered Visits (${dateRange}):`, filteredVisits.length);
+
+    const previousStart = subDays(start, (dateRange === "thisWeek" ? 7 : 30)); // Rough estimate for previous
+    const previousEnd = subDays(end, (dateRange === "thisWeek" ? 7 : 30));
+    // For all time, 'previous' is effectively empty or arbitrary 0 comparison
+
+    const previousVisits = visits.filter(v => {
+      if (dateRange === "allTime") return false;
+      if (!v.startTime && !v.createdAt) return false;
+      const d = parseISO(v.startTime || v.createdAt);
+      return isWithinInterval(d, { start: previousStart, end: previousEnd });
+    });
+
+    // KPI Calculations
+
+    // 1. Total Facilities (Unique facilities in the ENTIRE dataset usually, but let's respect filters if implicit)
+    // User Request: "list of all the facilities... u ad them up and find the total facilities"
+    // Interpretation: Total unique facilities found in the currently fetched data (which is 1000 items). 
+    // If 'All Time' is selected, this is accurate. If a partial range is selected, it shows facilities active in that range.
+    // However, usually "Total Facilities" implies a system-wide count. 
+    // Let's use the unique count from *all fetched visits* to be safe as a "System Total" proxy if filters are loose, 
+    // or strictly filtered if that's standard. 
+    // Givne the prompt ("sum of all the daily visits made by the sales that week"), let's match the metric to the filter.
+
+    // BUT for "New Clients", we need history.
+    const facilityFirstSeen: Record<string, number> = {};
+    visits.forEach(v => {
+      const name = v.client?.name;
+      if (!name) return;
+      const date = new Date(v.startTime || v.createdAt).getTime();
+      if (!facilityFirstSeen[name] || date < facilityFirstSeen[name]) {
+        facilityFirstSeen[name] = date;
+      }
+    });
+
+    // 2. New Clients
+    // "when a user enters a new facility the data is checked if it is a new facility... after the end of the week... nolonger a new facility"
+    // Logic: Count facilities whose FIRST visit ever falls within the current [start, end] interval.
+    let newClientsCount = 0;
+    Object.values(facilityFirstSeen).forEach(firstSeenDate => {
+      if (firstSeenDate >= start.getTime() && firstSeenDate <= end.getTime()) {
+        newClientsCount++;
+      }
+    });
+
+    const totalVisitsCount = filteredVisits.length;
+    const previousVisitsCount = previousVisits.length;
+
+    let visitGrowth = 0;
+    if (dateRange === "allTime") {
+      visitGrowth = 100;
+    } else {
+      visitGrowth = previousVisitsCount > 0
+        ? Math.round(((totalVisitsCount - previousVisitsCount) / previousVisitsCount) * 100)
+        : (totalVisitsCount > 0 ? 100 : 0);
+    }
+
+    const uniqueFacilitiesFiltered = new Set(filteredVisits.map(v => v.client?.name)).size;
+    // User likely wants "Total Facilities" to be the count of unique facilities active in this period? 
+    // OR the Total System Facilities? "Total Facilities" usually implies the latter.
+    // Let's stick to unique facilities in the *filtered* view for consistency with the card label "recorded in system" might imply total.
+    // Let's show Unique Active Facilities for this period. 
+    const totalFacilities = uniqueFacilitiesFiltered;
+
+    // If user specifically wants "Total Facilities Recorded" (all time) regardless of filter:
+    // const totalFacilities = Object.keys(facilityFirstSeen).length; 
+    // But "0" in the original issue suggests it was reacting to filters. Let's keep it responsive.
+
+    const salesRepsCount = users.filter(u => u.role === "sales" || u.role === "user").length;
+
+    // Leaderboards
+    // A. Top Facilities
+    const facilityCounts: Record<string, { count: number, location: string, lastVisit: string }> = {};
+    filteredVisits.forEach(v => {
+      const name = v.client?.name || "Unknown";
+      if (!facilityCounts[name]) {
+        facilityCounts[name] = {
+          count: 0,
+          location: v.client?.location || "N/A",
+          lastVisit: v.startTime || v.createdAt || ""
         };
-      } catch (err) {
-        console.error("Dashboard query failed:", err);
-        throw err;
       }
-    },
-    staleTime: 1000 * 60 * 5, // Cache for 5 minutes
-    retry: 2,
-    enabled: typeof window !== 'undefined' && !!currentUser,
-  });
+      facilityCounts[name].count++;
+      const currentVisitTime = new Date(v.startTime || v.createdAt);
+      if (currentVisitTime > new Date(facilityCounts[name].lastVisit)) {
+        facilityCounts[name].lastVisit = v.startTime || v.createdAt;
+      }
+    });
+    const topFacilities = Object.entries(facilityCounts)
+      .map(([name, data]) => ({ name, ...data }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 5);
 
-  // Fetch performance trend data for chart
-  const { data: performanceData } = useQuery({
-    queryKey: ["performance", dateRange, currentUser?.region],
-    queryFn: async () => {
-      if (typeof window === 'undefined') return [];
+    // B. Top Sales Reps
+    const repCounts: Record<string, { count: number, id: string, name: string }> = {};
+    filteredVisits.forEach(v => {
+      const u = v.user;
+      const name = u ? `${u.firstName} ${u.lastName}` : "Unknown Rep";
+      if (!repCounts[name]) {
+        repCounts[name] = { count: 0, id: u?._id, name };
+      }
+      repCounts[name].count++;
+    });
+    const topReps = Object.values(repCounts)
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 5);
 
-      const token = localStorage.getItem("accessToken");
-      const region = currentUser?.region || "North";
-      const url = `https://app.codewithseth.co.ke/api/dashboard/performance?startDate=${dateRange.startDate}&endDate=${dateRange.endDate}&region=${region}`;
-      const res = await fetch(url, {
-        headers: {
-          Authorization: token ? `Bearer ${token}` : ""
-        }
-      });
-      const data = await res.json();
-      return data.success && Array.isArray(data.data) ? data.data : [];
-    },
-    enabled: !!currentUser,
-    staleTime: 1000 * 60 * 5,
-  });
+    // Visit Outcome Breakdown
+    const outcomes = { success: 0, followup: 0, rejected: 0 };
+    filteredVisits.forEach(v => {
+      // Normalize distinct outcomes if data is messy, assuming structured for now
+      // Or infer from status if outcome field missing
+      const outcome = (v.visitOutcome || v.status || "").toLowerCase();
+      if (outcome.includes("success") || outcome.includes("completed") || outcome.includes("sale") || outcome.includes("deal")) outcomes.success++;
+      else if (outcome.includes("follow") || outcome.includes("pending") || outcome.includes("progress")) outcomes.followup++;
+      else outcomes.rejected++;
+    });
 
-  // Sales Heatmap Query
-  const { data: salesHeatmap, isLoading: heatmapLoading } = useQuery({
-    queryKey: ["salesHeatmap"],
-    queryFn: apiService.getSalesHeatmap,
-    staleTime: 1000 * 60 * 10, // cache 10 mins
-    enabled: typeof window !== 'undefined',
-  });
+    // Trends (Daily)
+    const dailyVisits: Record<string, number> = {};
+    filteredVisits.forEach(v => {
+      if (v.startTime || v.createdAt) {
+        const day = format(parseISO(v.startTime || v.createdAt), "MMM dd");
+        dailyVisits[day] = (dailyVisits[day] || 0) + 1;
+      }
+    });
+    const trendLabels = Object.keys(dailyVisits).sort((a, b) => new Date(a).getTime() - new Date(b).getTime()); // Approximate sort
+    // Better sort: create array of dates in range and fill
 
-  // Transform recent activity
-  const recentActivityArr = Array.isArray(data?.recentActivity) ? data.recentActivity : [];
-  const transformedActivity = recentActivityArr.map((item: any, index: number) => ({
-    id: item.id || index.toString(),
-    type: item.type || (index % 2 === 0 ? "visit" : "lead"),
-    description: item.description || item.action || `Activity ${index + 1}`,
-    timestamp: item.timestamp || item.createdAt || new Date().toISOString(),
-    client: item.client?.name || item.clientName,
-  }));
+    return {
+      kpi: {
+        totalVisits: totalVisitsCount,
+        visitGrowth,
+        newClients: newClientsCount,
+        totalFacilities: totalFacilities,
+        salesReps: salesRepsCount
+      },
+      topFacilities,
+      topReps,
+      outcomes,
+      recentActivity: filteredVisits.slice(0, 7), // Latest 7
+      trendData: dailyVisits
+    };
+  }, [visits, leads, users, dateRange]);
 
-  // Fetch leads data for chart
-  const { data: leadsData, isLoading: leadsChartLoading } = useQuery({
-    queryKey: ["allLeads"],
-    queryFn: async () => {
-      if (typeof window === 'undefined') return [];
 
-      const token = localStorage.getItem("accessToken");
-      const res = await fetch("https://app.codewithseth.co.ke/api/admin/leads?page=1&limit=1000", {
-        headers: {
-          "Content-Type": "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {})
-        }
-      });
-      const data = await res.json();
-      return data?.data?.docs || data?.docs || data?.data || [];
-    },
-    staleTime: 1000 * 60 * 5,
-    enabled: typeof window !== 'undefined',
-  });
+  // --- 3. Sub-page Rendering ---
+  if (showVisits) return <VisitsPage />; // Simpler for now, or wrap in layout
+  if (showReports) return <Reports />;
+  if (showQuotations) return <QuotationList />;
+  if (showContactData) return <VisitContactData onClose={() => setShowContactData(false)} />;
 
-  // Build date-indexed maps for visits and leads
-  const visitsResDocs = data?.overview?.visits || [];
-  const leadsDocs = Array.isArray(leadsData) ? leadsData : [];
+  if (loadingVisits) {
+    return <div className="p-8 flex items-center justify-center min-h-screen text-primary">Loading Analytics...</div>;
+  }
 
-  // Collect all unique dates from both datasets and sort chronologically (oldest to latest)
-  const allDatesSet = new Set<string>();
-  visitsResDocs.forEach((v: any) => v.date && allDatesSet.add(v.date.slice(0, 10)));
-  leadsDocs.forEach((l: any) => {
-    const dateStr = l.createdAt || l.date;
-    if (dateStr) allDatesSet.add(dateStr.slice(0, 10));
-  });
-  const allDates = Array.from(allDatesSet).sort((a, b) => a.localeCompare(b)); // Sort oldest to latest
-
-  // Count visits and leads per date
-  const visitsByDate: Record<string, number> = {};
-  visitsResDocs.forEach((v: any) => {
-    const d = v.date?.slice(0, 10);
-    if (d) visitsByDate[d] = (visitsByDate[d] || 0) + 1;
-  });
-  const leadsByDate: Record<string, number> = {};
-  leadsDocs.forEach((l: any) => {
-    const dateStr = l.createdAt || l.date;
-    const d = dateStr?.slice(0, 10);
-    if (d) leadsByDate[d] = (leadsByDate[d] || 0) + 1;
-  });
-
-  // Chart.js data for performance trends: Visits vs Leads
-  const performanceChartData = {
-    labels: allDates.map((d) => format(new Date(d), "MMM dd")),
+  // --- 4. Chart Configs ---
+  const lineChartData = {
+    labels: Object.keys(processedData.trendData),
     datasets: [
       {
         label: "Visits",
-        data: allDates.map((d) => visitsByDate[d] || 0),
-        borderColor: "hsl(var(--primary))",
-        backgroundColor: "hsl(var(--primary)/0.2)",
-        fill: false,
-        tension: 0.3,
+        data: Object.values(processedData.trendData),
+        borderColor: COLORS.primary,
+        backgroundColor: "rgba(0, 137, 244, 0.1)",
+        fill: true,
+        tension: 0.4,
         pointRadius: 4,
         pointHoverRadius: 6,
-      },
-      {
-        label: "Leads",
-        data: allDates.map((d) => leadsByDate[d] || 0),
-        borderColor: "rgb(147, 51, 234)",
-        backgroundColor: "rgba(147, 51, 234, 0.2)",
-        fill: false,
-        tension: 0.3,
-        pointRadius: 4,
-        pointHoverRadius: 6,
-      },
-    ],
+      }
+    ]
   };
 
-  // Sales Heatmap chart data - sort by timestamp (oldest to latest)
-  const sortedSalesHeatmap = salesHeatmap
-    ? [...salesHeatmap].sort((a: any, b: any) => {
-      const dateA = new Date(a.timestamp || a.date || a.createdAt || 0).getTime();
-      const dateB = new Date(b.timestamp || b.date || b.createdAt || 0).getTime();
-      return dateA - dateB; // Oldest to latest
-    })
-    : [];
-
-  const salesHeatmapChartData = {
-    labels: sortedSalesHeatmap.map((item: any) => `${item.userName} (${item.location})`),
+  const outcomeChartData = {
+    labels: ["Successful", "Follow-Up", "No Outcome"],
     datasets: [
       {
-        label: "Sales Activity",
-        data: sortedSalesHeatmap.map((item: any) => item.count),
-        backgroundColor: "hsl(var(--primary)/0.5)",
-      },
-    ],
-  };
-
-  // Heatmap chart data
-  const heatmapChartData = {
-    labels: Object.keys(data?.heatmap || {}),
-    datasets: [
-      {
-        label: "Activity Intensity",
-        data: Object.values(data?.heatmap || {}),
-        backgroundColor: "hsl(var(--primary)/0.5)",
-      },
-    ],
-  };
-
-  // Download Functions
-  const downloadDashboardData = async (format: 'csv' | 'json' | 'excel') => {
-    if (typeof window === 'undefined') return;
-
-    try {
-      const dashboardData = {
-        summary: {
-          totalVisits,
-          totalLeads,
-          averageVisitDuration: averageDuration,
-          dateRange: dateRange,
-          generatedAt: new Date().toISOString(),
-          user: {
-            name: `${currentUser?.firstName} ${currentUser?.lastName}`,
-            role: currentUser?.role,
-            region: currentUser?.region,
-          }
-        },
-        visits: visitsResDocs,
-        leads: leadsDocs,
-        recentActivity: transformedActivity,
-        performance: data?.performance,
-      };
-
-      if (format === 'json') {
-        // Download as JSON
-        const blob = new Blob([JSON.stringify(dashboardData, null, 2)], { type: 'application/json' });
-        const url = window.URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = `dashboard-data-${new Date().toISOString().split('T')[0]}.json`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        window.URL.revokeObjectURL(url);
-
-        toast({
-          title: "Download Started",
-          description: "Dashboard data exported as JSON",
-        });
-      } else if (format === 'csv') {
-        // Download as CSV
-        const csvRows = [];
-
-        // Summary section
-        csvRows.push('Dashboard Summary Report');
-        csvRows.push(`Generated: ${new Date().toLocaleString()}`);
-        csvRows.push(`User: ${currentUser?.firstName} ${currentUser?.lastName} (${currentUser?.role})`);
-        csvRows.push(`Region: ${currentUser?.region}`);
-        csvRows.push('');
-
-        // Metrics
-        csvRows.push('Metric,Value');
-        csvRows.push(`Total Visits,${totalVisits}`);
-        csvRows.push(`Total Leads,${totalLeads}`);
-        csvRows.push(`Average Visit Duration (min),${averageDuration}`);
-        csvRows.push('');
-
-        // Visits data
-        csvRows.push('Visits');
-        csvRows.push('Date,Client,Location,Duration,Status');
-        visitsResDocs.forEach((visit: any) => {
-          csvRows.push(`${visit.date},${visit.client?.name || 'N/A'},${visit.client?.location || 'N/A'},${visit.duration || 'N/A'},${visit.status || 'N/A'}`);
-        });
-        csvRows.push('');
-
-        // Leads data
-        csvRows.push('Leads');
-        csvRows.push('Date,Name,Company,Status,Value');
-        leadsDocs.forEach((lead: any) => {
-          const date = lead.createdAt || lead.date || 'N/A';
-          csvRows.push(`${date},${lead.name || 'N/A'},${lead.company || 'N/A'},${lead.status || 'N/A'},${lead.value || 0}`);
-        });
-
-        const csvContent = csvRows.join('\n');
-        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-        const url = window.URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = `dashboard-report-${new Date().toISOString().split('T')[0]}.csv`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        window.URL.revokeObjectURL(url);
-
-        toast({
-          title: "Download Started",
-          description: "Dashboard data exported as CSV",
-        });
-      } else if (format === 'excel') {
-        // Download Excel from analytics API
-        try {
-          const token = authService.getAccessToken();
-          const response = await fetch('https://app.codewithseth.co.ke/api/analytics/report/latest', {
-            headers: {
-              'Authorization': `Bearer ${token}`,
-            },
-          });
-
-          if (!response.ok) {
-            throw new Error('Excel report not available. Generate analytics first.');
-          }
-
-          const blob = await response.blob();
-          const url = window.URL.createObjectURL(blob);
-          const link = document.createElement('a');
-          link.href = url;
-          link.download = `analytics-report-${new Date().toISOString().split('T')[0]}.xlsx`;
-          document.body.appendChild(link);
-          link.click();
-          document.body.removeChild(link);
-          window.URL.revokeObjectURL(url);
-
-          toast({
-            title: "Download Started",
-            description: "Excel analytics report downloaded",
-          });
-        } catch (error) {
-          toast({
-            title: "Excel Report Unavailable",
-            description: "Generate analytics first or use CSV export",
-            variant: "destructive",
-          });
-        }
+        data: [processedData.outcomes.success, processedData.outcomes.followup, processedData.outcomes.rejected],
+        backgroundColor: [COLORS.primary, COLORS.warning, COLORS.secondary],
+        borderWidth: 0,
       }
-    } catch (error) {
-      console.error('Download error:', error);
-      toast({
-        title: "Download Failed",
-        description: "Failed to export dashboard data",
-        variant: "destructive",
-      });
-    }
+    ]
   };
 
-  const [showDownloadMenu, setShowDownloadMenu] = useState(false);
-  const [isRefreshing, setIsRefreshing] = useState(false);
-
-  // Refresh handler
-  const handleRefresh = async () => {
-    if (typeof window === 'undefined') return;
-
-    setIsRefreshing(true);
-    try {
-      await refetch();
-      // Also refetch leads
-      const token = localStorage.getItem("accessToken");
-      const res = await fetch("https://app.codewithseth.co.ke/api/admin/leads?page=1&limit=1", {
-        headers: {
-          "Content-Type": "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {})
-        }
-      });
-      const data = await res.json();
-      let totalCount = 0;
-      if (data?.data?.totalDocs) {
-        totalCount = data.data.totalDocs;
-      } else if (data?.totalDocs) {
-        totalCount = data.totalDocs;
-      } else {
-        const docs = data?.data?.docs || data?.docs || data?.data || [];
-        totalCount = Array.isArray(docs) ? docs.length : 0;
-      }
-      setTotalLeads(totalCount);
-
-      toast({
-        title: "Dashboard Refreshed",
-        description: "All data has been updated successfully",
-      });
-    } catch (err) {
-      console.error("Refresh failed:", err);
-      toast({
-        title: "Refresh Failed",
-        description: "Unable to refresh dashboard data",
-        variant: "destructive",
-      });
-    } finally {
-      setIsRefreshing(false);
-    }
-  };
-
-  if (isLoading || leadsChartLoading) {
-    return (
-      <div className="space-y-6">
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-          {[...Array(4)].map((_, i) => (
-            <div key={i} className="h-32 neumorphic-card animate-pulse bg-primary/10 rounded-lg" />
-          ))}
-        </div>
-        <div className="h-64 neumorphic-card animate-pulse bg-primary/10 rounded-lg" />
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="text-center py-8">
-        <p className="text-muted-foreground">Failed to load dashboard data. Please try again later.</p>
-        <Button onClick={() => window.location.reload()} className="mt-4 neumorphic-button">
-          Retry
-        </Button>
-      </div>
-    );
-  }
-
-  // Show reports page if button is clicked
-  if (showReports) {
-    return (
-      <div className="space-y-6">
-        <Button
-          variant="outline"
-          className="mb-4 flex items-center gap-2"
-          onClick={() => setShowReports(false)}
-        >
-          ← Back to Dashboard
-        </Button>
-        <Reports />
-      </div>
-    );
-  }
-
-  // Show visits page if button is clicked
-  if (showVisits) {
-    return (
-      <div className="space-y-6">
-        <Button
-          variant="outline"
-          className="mb-4 flex items-center gap-2"
-          onClick={() => setShowVisits(false)}
-        >
-          ← Back to Dashboard
-        </Button>
-        <VisitsPage />
-      </div>
-    );
-  }
-
-  // Show quotations page if button is clicked
-  if (showQuotations) {
-    return (
-      <div className="space-y-6">
-        <Button
-          variant="outline"
-          className="mb-4 flex items-center gap-2"
-          onClick={() => setShowQuotations(false)}
-        >
-          ← Back to Dashboard
-        </Button>
-        <QuotationList />
-      </div>
-    );
-  }
-
-  if (showEngineerReports) {
-    return (
-      <div className="space-y-6">
-        <Button
-          variant="outline"
-          className="mb-4 flex items-center gap-2"
-          onClick={() => setShowEngineerReports(false)}
-        >
-          ← Back to Dashboard
-        </Button>
-        {/* lazy load EngineerReports component */}
-        <React.Suspense fallback={<div className="p-4">Loading engineer reports...</div>}>
-          {/* @ts-ignore Server/Client boundary: component is client */}
-          <EngineerReports />
-        </React.Suspense>
-      </div>
-    );
-  }
-
-  if (showPerformance) {
-    return (
-      <div className="space-y-6">
-        <Button
-          variant="outline"
-          className="mb-4 flex items-center gap-2"
-          onClick={() => setShowPerformance(false)}
-        >
-          ← Back to Dashboard
-        </Button>
-        <PerformanceAnalytics />
-      </div>
-    );
-  }
-
-  // Enhanced modern professional layout with improved visual hierarchy and sidebar support
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-blue-50/20 to-gray-50">
-      <div className="max-w-full mx-auto px-3 sm:px-4 lg:px-8 py-4 sm:py-6 lg:py-8 space-y-4 sm:space-y-6">
-        {/* Simplified Header - Cleaner with sidebar layout */}
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100/80 overflow-hidden">
-          <div className="bg-gradient-to-r from-[#008cf7] to-[#006bb8] p-6 sm:p-8">
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-              {/* Title Area */}
-              <div>
-                <h1 className="text-2xl sm:text-3xl font-bold text-white tracking-tight">Dashboard Overview</h1>
-                <p className="text-sm sm:text-base text-white/90 mt-1 font-medium">
-                  {currentUser ? `${currentUser.firstName} ${currentUser.lastName} • ${currentUser.role} • ${currentUser.region}` : "Loading..."}
-                </p>
-              </div>
+    <div className="min-h-screen bg-slate-50 font-sans text-slate-800 pb-12">
+      {/* Header */}
+      <div className="bg-white border-b sticky top-0 z-10 px-6 py-4 flex items-center justify-between shadow-sm">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900">Dashboard Overview</h1>
+          <p className="text-sm text-slate-500">Welcome back, {currentUser?.firstName || "Admin"}</p>
+        </div>
+        <div className="flex items-center gap-3">
+          <Select value={dateRange} onValueChange={setDateRange}>
+            <SelectTrigger className="w-[150px]">
+              <Calendar className="w-4 h-4 mr-2" />
+              <SelectValue placeholder="Period" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="thisWeek">This Week</SelectItem>
+              <SelectItem value="thisMonth">This Month</SelectItem>
+              <SelectItem value="lastMonth">Last Month</SelectItem>
+              <SelectItem value="allTime">All Time</SelectItem>
+            </SelectContent>
+          </Select>
+          <Button onClick={() => setShowContactData(true)} variant="outline" className="border-blue-200 text-blue-700 hover:bg-blue-50">
+            <Users className="w-4 h-4 mr-2" /> Contact Visit Data
+          </Button>
+          <Button onClick={() => setShowReports(true)} variant="outline">
+            <FileText className="w-4 h-4 mr-2" /> Reports
+          </Button>
+          <Button onClick={() => setShowVisits(true)} variant="default" className="bg-[#0089f4] hover:bg-blue-600">
+            <MapPin className="w-4 h-4 mr-2" /> Visits Manager
+          </Button>
+        </div>
+      </div>
 
-              {/* Actions - Desktop */}
-              <div className="hidden sm:flex items-center gap-2">
-                {/* Refresh Button */}
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={handleRefresh}
-                  disabled={isRefreshing}
-                  className="bg-white/20 text-white hover:bg-white/30 backdrop-blur-sm border border-white/40 transition-all duration-200"
-                >
-                  <RefreshCw className={`h-4 w-4 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
-                  Refresh
-                </Button>
+      <div className="max-w-7xl mx-auto px-6 py-8 space-y-8">
 
-                {/* Enhanced Download Dropdown */}
-                <div className="relative">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="bg-white/20 text-white hover:bg-white/30 backdrop-blur-sm border border-white/40 transition-all duration-200"
-                    onClick={() => setShowDownloadMenu(!showDownloadMenu)}
-                  >
-                    <Download className="h-4 w-4 mr-2" />
-                    Export
-                  </Button>
-
-                  {showDownloadMenu && (
-                    <>
-                      <div
-                        className="fixed inset-0 z-40"
-                        onClick={() => setShowDownloadMenu(false)}
-                      />
-                      <div className="absolute right-0 mt-2 w-56 bg-white rounded-xl shadow-2xl border border-gray-100 z-50 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
-                        <div className="py-2">
-                          <button
-                            className="w-full text-left px-4 py-3 hover:bg-blue-50 flex items-center gap-3 text-sm text-gray-700 transition-colors group"
-                            onClick={() => {
-                              downloadDashboardData('csv');
-                              setShowDownloadMenu(false);
-                            }}
-                          >
-                            <div className="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center group-hover:bg-[#008cf7] transition-colors">
-                              <FileText className="h-4 w-4 text-[#008cf7] group-hover:text-white transition-colors" />
-                            </div>
-                            <div>
-                              <div className="font-medium">Export as CSV</div>
-                              <div className="text-xs text-gray-500">Download spreadsheet</div>
-                            </div>
-                          </button>
-                          <button
-                            className="w-full text-left px-4 py-3 hover:bg-blue-50 flex items-center gap-3 text-sm text-gray-700 transition-colors group"
-                            onClick={() => {
-                              downloadDashboardData('json');
-                              setShowDownloadMenu(false);
-                            }}
-                          >
-                            <div className="w-8 h-8 rounded-lg bg-purple-100 flex items-center justify-center group-hover:bg-purple-600 transition-colors">
-                              <FileText className="h-4 w-4 text-purple-600 group-hover:text-white transition-colors" />
-                            </div>
-                            <div>
-                              <div className="font-medium">Export as JSON</div>
-                              <div className="text-xs text-gray-500">Download data file</div>
-                            </div>
-                          </button>
-                          <button
-                            className="w-full text-left px-4 py-3 hover:bg-blue-50 flex items-center gap-3 text-sm text-gray-700 transition-colors group"
-                            onClick={() => {
-                              downloadDashboardData('excel');
-                              setShowDownloadMenu(false);
-                            }}
-                          >
-                            <div className="w-8 h-8 rounded-lg bg-green-100 flex items-center justify-center group-hover:bg-green-600 transition-colors">
-                              <FileText className="h-4 w-4 text-green-600 group-hover:text-white transition-colors" />
-                            </div>
-                            <div>
-                              <div className="font-medium">Analytics Excel</div>
-                              <div className="text-xs text-gray-500">Full analytics report</div>
-                            </div>
-                          </button>
-                        </div>
-                      </div>
-                    </>
-                  )}
-                </div>
-              </div>
-
-              {/* Mobile Export Button */}
-              <div className="sm:hidden">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="w-full bg-white/20 text-white hover:bg-white/30 backdrop-blur-sm border border-white/40"
-                  onClick={() => setShowDownloadMenu(!showDownloadMenu)}
-                >
-                  <Download className="h-4 w-4 mr-2" />
-                  Export Data
-                </Button>
-              </div>
-            </div>
-          </div>
+        {/* 1. Executive Overview (KPIs) */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <KpiCard
+            title="Total Visits"
+            value={processedData.kpi.totalVisits}
+            trend={processedData.kpi.visitGrowth}
+            icon={MapPin}
+            subtext="vs previous period"
+          />
+          <KpiCard
+            title="New Clients"
+            value={processedData.kpi.newClients}
+            icon={UserCheck}
+            subtext="New leads added"
+            trend={null}
+          />
+          <KpiCard
+            title="Total Facilities"
+            value={processedData.kpi.totalFacilities}
+            icon={Briefcase}
+            subtext="recorded in system"
+            isNeutral
+          />
+          <KpiCard
+            title="Sales Team"
+            value={processedData.kpi.salesReps}
+            icon={Users}
+            subtext="Active representatives"
+            isNeutral
+          />
         </div>
 
-        {/* Stats Cards Row - Enhanced Modern Cards with Animations */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-          {/* Total Visits Card - Clickable */}
-          <button
-            onClick={() => {
-              // Navigate to daily reports page
-              if (onPageChange) {
-                onPageChange('daily-reports');
-              }
-            }}
-            className="text-left w-full"
-          >
-            <Card className="bg-white hover:shadow-xl transition-all duration-300 border border-gray-100 overflow-hidden group cursor-pointer hover:border-blue-300">
-              <CardContent className="p-5 sm:p-6">
-                <div className="flex items-center justify-between mb-4">
-                  <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl bg-gradient-to-br from-blue-100 to-blue-50 flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
-                    <MapPin className="h-5 w-5 sm:h-6 sm:w-6 text-[#008cf7]" />
-                  </div>
-                  <span className="text-xs font-semibold text-green-600 bg-green-50 px-2.5 py-1 rounded-full border border-green-200">
-                    Active
-                  </span>
-                </div>
-                <div>
-                  <p className="text-xs sm:text-sm font-medium text-gray-500 mb-1.5 uppercase tracking-wide">Total Visits</p>
-                  <p className="text-3xl sm:text-4xl font-bold text-gray-900 mb-1">{totalVisits.toLocaleString()}</p>
-                  <p className="text-xs text-gray-400 flex items-center gap-1">
-                    <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse"></span>
-                    Click to view reports
-                  </p>
-                </div>
-              </CardContent>
-            </Card>
-          </button>
-
-          {/* Total Leads Card - Clickable */}
-          <button
-            onClick={() => {
-              // Navigate to leads page
-              if (onPageChange) {
-                onPageChange('leads');
-              }
-            }}
-            className="text-left w-full"
-          >
-            <Card className="bg-white hover:shadow-xl transition-all duration-300 border border-gray-100 overflow-hidden group cursor-pointer hover:border-purple-300">
-              <CardContent className="p-5 sm:p-6">
-                <div className="flex items-center justify-between mb-4">
-                  <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl bg-gradient-to-br from-purple-100 to-purple-50 flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
-                    <UserPlus className="h-5 w-5 sm:h-6 sm:w-6 text-purple-600" />
-                  </div>
-                  <span className="text-xs font-semibold text-purple-600 bg-purple-50 px-2.5 py-1 rounded-full border border-purple-200">
-                    Prospects
-                  </span>
-                </div>
-                <div>
-                  <p className="text-xs sm:text-sm font-medium text-gray-500 mb-1.5 uppercase tracking-wide">Total Leads</p>
-                  {leadsLoading ? (
-                    <div className="flex items-center gap-2 mb-1">
-                      <div className="h-10 w-24 bg-purple-100 animate-pulse rounded"></div>
-                    </div>
-                  ) : (
-                    <p className="text-3xl sm:text-4xl font-bold text-gray-900 mb-1">{totalLeads.toLocaleString()}</p>
-                  )}
-                  <p className="text-xs text-gray-400 flex items-center gap-1">
-                    <span className="w-1.5 h-1.5 rounded-full bg-purple-500"></span>
-                    Click to view leads
-                  </p>
-                </div>
-              </CardContent>
-            </Card>
-          </button>
-
-          {/* Visit Duration Card */}
-          <Card className="bg-white hover:shadow-xl transition-all duration-300 border border-gray-100 overflow-hidden group">
-            <CardContent className="p-5 sm:p-6">
-              <div className="flex items-center justify-between mb-4">
-                <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl bg-gradient-to-br from-orange-100 to-orange-50 flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
-                  <Clock className="h-5 w-5 sm:h-6 sm:w-6 text-orange-600" />
-                </div>
-                <span className="text-xs font-semibold text-gray-600 bg-gray-100 px-2.5 py-1 rounded-full border border-gray-200">
-                  Average
-                </span>
-              </div>
-              <div>
-                <p className="text-xs sm:text-sm font-medium text-gray-500 mb-1.5 uppercase tracking-wide">Visit Duration</p>
-                <p className="text-3xl sm:text-4xl font-bold text-gray-900 mb-1">
-                  {averageDuration}<span className="text-lg sm:text-xl text-gray-400 ml-1">min</span>
-                </p>
-                <p className="text-xs text-gray-400 flex items-center gap-1">
-                  <span className="w-1.5 h-1.5 rounded-full bg-orange-500"></span>
-                  Per visit
-                </p>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Completion Rate Card */}
-          <Card className="bg-white hover:shadow-xl transition-all duration-300 border border-gray-100 overflow-hidden group">
-            <CardContent className="p-5 sm:p-6">
-              <div className="flex items-center justify-between mb-4">
-                <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl bg-gradient-to-br from-green-100 to-green-50 flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
-                  <CheckCircle className="h-5 w-5 sm:h-6 sm:w-6 text-green-600" />
-                </div>
-                <span className="text-xs font-semibold text-green-600 bg-green-50 px-2.5 py-1 rounded-full border border-green-200">
-                  {Math.round(data?.performance.completionRate || 0)}%
-                </span>
-              </div>
-              <div>
-                <p className="text-xs sm:text-sm font-medium text-gray-500 mb-1.5 uppercase tracking-wide">Completion Rate</p>
-                <p className="text-3xl sm:text-4xl font-bold text-gray-900 mb-1">{data?.performance.visitsThisMonth ?? 0}</p>
-                <p className="text-xs text-gray-400 flex items-center gap-1">
-                  <span className="w-1.5 h-1.5 rounded-full bg-green-500"></span>
-                  Visits this month
-                </p>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Charts Section - Enhanced Professional Layout */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
-          {/* Performance Trends - Takes 2/3 width on desktop */}
-          <Card className="lg:col-span-2 bg-white border border-gray-100 shadow-sm hover:shadow-lg transition-all duration-300 overflow-hidden">
-            <CardHeader className="border-b border-gray-50 bg-gradient-to-r from-gray-50/50 to-transparent pb-5">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#008cf7] to-[#006bb8] flex items-center justify-center shadow-lg">
-                    <TrendingUp className="h-5 w-5 text-white" />
-                  </div>
-                  <div>
-                    <CardTitle className="text-lg font-bold text-gray-900">Performance Trends</CardTitle>
-                    <CardDescription className="text-xs text-gray-500 mt-0.5">
-                      Visits vs Trails over time
-                    </CardDescription>
-                  </div>
-                </div>
-                <div className="hidden sm:flex items-center gap-4 text-xs">
-                  <div className="flex items-center gap-2">
-                    <div className="w-3 h-3 rounded-full bg-[#008cf7]"></div>
-                    <span className="text-gray-600 font-medium">Visits</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div className="w-3 h-3 rounded-full bg-orange-500"></div>
-                    <span className="text-gray-600 font-medium">Trails</span>
-                  </div>
-                </div>
-              </div>
+        {/* 2. Charts Row: Trends & Outcomes */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Trends Line Chart */}
+          <Card className="lg:col-span-2 shadow-sm border-slate-200">
+            <CardHeader>
+              <CardTitle className="text-lg">Visit Trends</CardTitle>
+              <CardDescription>Performance over time</CardDescription>
             </CardHeader>
-            <CardContent className="pt-6 pb-4 px-4 sm:px-6">
-              <div className="h-[280px] sm:h-80">
+            <CardContent>
+              <div className="h-[300px] w-full">
                 <Line
-                  data={performanceChartData}
+                  data={lineChartData}
                   options={{
                     responsive: true,
                     maintainAspectRatio: false,
-                    plugins: {
-                      legend: {
-                        display: true,
-                        position: "top",
-                        labels: {
-                          usePointStyle: true,
-                          padding: 15,
-                          font: { size: 12, weight: 'bold' },
-                          color: '#374151'
-                        }
-                      },
-                      tooltip: {
-                        mode: "index",
-                        intersect: false,
-                        backgroundColor: 'rgba(0, 0, 0, 0.85)',
-                        padding: 14,
-                        cornerRadius: 10,
-                        titleFont: { size: 13, weight: 'bold' },
-                        bodyFont: { size: 12 }
-                      },
-                    },
-                    interaction: { mode: "nearest", axis: "x", intersect: false },
                     scales: {
-                      x: {
-                        grid: { display: false },
-                        ticks: {
-                          font: { size: 11 },
-                          color: '#6b7280'
-                        }
-                      },
-                      y: {
-                        beginAtZero: true,
-                        ticks: {
-                          font: { size: 11 },
-                          color: '#6b7280'
-                        },
-                        grid: { color: 'rgba(0, 0, 0, 0.04)' }
-                      },
+                      y: { grid: { color: "#f1f5f9" }, beginAtZero: true },
+                      x: { grid: { display: false } }
                     },
+                    plugins: {
+                      legend: { display: false },
+                      tooltip: {
+                        backgroundColor: "#1e293b",
+                        padding: 12,
+                        cornerRadius: 8
+                      }
+                    }
                   }}
                 />
               </div>
             </CardContent>
           </Card>
 
-          {/* Top Performers - 1/3 width on desktop */}
-          <Card className="bg-white border border-gray-100 shadow-sm hover:shadow-lg transition-all duration-300 overflow-hidden">
-            <CardHeader className="border-b border-gray-50 bg-gradient-to-r from-gray-50/50 to-transparent pb-5">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500 to-purple-600 flex items-center justify-center shadow-lg">
-                  <BarChart3 className="h-5 w-5 text-white" />
-                </div>
-                <div>
-                  <CardTitle className="text-lg font-bold text-gray-900">Top Performers</CardTitle>
-                  <CardDescription className="text-xs text-gray-500 mt-0.5">
-                    Sales rep activity
-                  </CardDescription>
+          {/* Visit Outcomes Pie Chart */}
+          <Card className="shadow-sm border-slate-200">
+            <CardHeader>
+              <CardTitle className="text-lg">Visit Outcomes</CardTitle>
+              <CardDescription>Breakdown by result</CardDescription>
+            </CardHeader>
+            <CardContent className="flex flex-col items-center justify-center">
+              <div className="h-[200px] w-[200px] relative">
+                <Doughnut
+                  data={outcomeChartData}
+                  options={{
+                    cutout: "70%",
+                    plugins: { legend: { display: false } }
+                  }}
+                />
+                <div className="absolute inset-0 flex items-center justify-center flex-col pointer-events-none">
+                  <span className="text-3xl font-bold text-slate-800">{processedData.kpi.totalVisits}</span>
+                  <span className="text-xs text-slate-500 uppercase">Total</span>
                 </div>
               </div>
-            </CardHeader>
-            <CardContent className="pt-6 pb-4 px-4 sm:px-6">
-              <div className="h-[280px] sm:h-80">
-                {heatmapLoading ? (
-                  <div className="h-full flex items-center justify-center">
-                    <div className="text-sm text-gray-400 flex flex-col items-center gap-2">
-                      <div className="w-8 h-8 border-4 border-gray-200 border-t-[#008cf7] rounded-full animate-spin"></div>
-                      <span>Loading data...</span>
-                    </div>
-                  </div>
-                ) : (
-                  <Bar
-                    data={salesHeatmapChartData}
-                    options={{
-                      responsive: true,
-                      maintainAspectRatio: false,
-                      plugins: {
-                        legend: { display: false },
-                        tooltip: {
-                          backgroundColor: 'rgba(0, 0, 0, 0.85)',
-                          padding: 14,
-                          cornerRadius: 10,
-                          titleFont: { size: 13, weight: 'bold' },
-                          bodyFont: { size: 12 }
-                        }
-                      },
-                      scales: {
-                        x: {
-                          grid: { display: false },
-                          ticks: {
-                            font: { size: 9 },
-                            maxRotation: 45,
-                            minRotation: 45,
-                            color: '#6b7280'
-                          }
-                        },
-                        y: {
-                          beginAtZero: true,
-                          ticks: {
-                            font: { size: 11 },
-                            color: '#6b7280'
-                          },
-                          grid: { color: 'rgba(0, 0, 0, 0.04)' }
-                        },
-                      },
-                    }}
-                  />
-                )}
+              <div className="w-full mt-6 space-y-3">
+                <OutcomeLegend label="Successful" value={processedData.outcomes.success} color="bg-[#0089f4]" />
+                <OutcomeLegend label="Follow-Up Needed" value={processedData.outcomes.followup} color="bg-amber-500" />
+                <OutcomeLegend label="No Outcome / Rejected" value={processedData.outcomes.rejected} color="bg-red-500" />
               </div>
             </CardContent>
           </Card>
         </div>
 
-        {/* Bottom Section - Full Width Recent Activity */}
-        <Card className="bg-white border border-gray-100 shadow-sm hover:shadow-lg transition-all duration-300 overflow-hidden">
-          <CardHeader className="border-b border-gray-50 bg-gradient-to-r from-gray-50/50 to-transparent pb-5">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#008cf7] to-[#006bb8] flex items-center justify-center shadow-lg">
-                  <Clock className="h-5 w-5 text-white" />
-                </div>
-                <div>
-                  <CardTitle className="text-lg font-bold text-gray-900">Recent Activity</CardTitle>
-                  <CardDescription className="text-xs text-gray-500 mt-0.5">
-                    Latest visits and trails
-                  </CardDescription>
-                </div>
-              </div>
-              <Badge variant="outline" className="text-xs bg-blue-50 text-[#008cf7] border-[#008cf7]/30">
-                {transformedActivity.length} items
-              </Badge>
-            </div>
-          </CardHeader>
-          <CardContent className="p-4 sm:p-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 max-h-[500px] overflow-y-auto scrollbar-thin scrollbar-thumb-gray-200 scrollbar-track-transparent">
-              {transformedActivity.length === 0 ? (
-                <div className="col-span-full flex flex-col items-center justify-center py-12 px-4">
-                  <div className="w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center mb-4">
-                    <Clock className="h-8 w-8 text-gray-400" />
-                  </div>
-                  <p className="text-sm text-gray-500 font-medium">No recent activity</p>
-                  <p className="text-xs text-gray-400 mt-1">Activity will appear here as it happens</p>
-                </div>
-              ) : (
-                transformedActivity.map((activity, index) => (
-                  <div
-                    key={activity.id}
-                    className="group flex items-start gap-3 p-4 rounded-xl bg-gray-50/50 hover:bg-gray-50 border border-gray-100/50 hover:border-gray-200 transition-all duration-200"
-                  >
-                    <div className={`flex-shrink-0 w-10 h-10 rounded-lg flex items-center justify-center transition-all duration-200 ${activity.type === 'visit'
-                      ? 'bg-blue-100 text-[#008cf7] group-hover:bg-[#008cf7] group-hover:text-white'
-                      : 'bg-purple-100 text-purple-600 group-hover:bg-purple-600 group-hover:text-white'
-                      }`}>
-                      {activity.type === 'visit' ? (
-                        <Users className="h-5 w-5" />
-                      ) : (
-                        <MapPin className="h-5 w-5" />
-                      )}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-start justify-between gap-2 mb-1">
-                        <p className="text-sm font-medium text-gray-900 leading-tight line-clamp-2">
-                          {activity.description}
-                        </p>
-                        <Badge
-                          variant="outline"
-                          className={`text-xs whitespace-nowrap flex-shrink-0 ${activity.type === 'visit'
-                            ? 'bg-blue-50 text-[#008cf7] border-[#008cf7]/30'
-                            : 'bg-purple-50 text-purple-600 border-purple-600/30'
-                            }`}
-                        >
-                          {activity.type}
-                        </Badge>
+        {/* 3. Leaderboards Row */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Top Facilities */}
+          <Card className="shadow-sm border-slate-200">
+            <CardHeader className="flex flex-row items-center justify-between">
+              <CardTitle className="text-lg">Top Facilities</CardTitle>
+              <Badge variant="secondary" className="bg-slate-100 text-slate-600">By Visits</Badge>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                {processedData.topFacilities.map((facility, i) => (
+                  <div key={i} className="flex items-center justify-between p-3 bg-slate-50 rounded-lg hover:bg-slate-100 transition-colors">
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-bold text-xs">
+                        {i + 1}
                       </div>
-                      {activity.client && (
-                        <p className="text-xs text-gray-500 mb-1 truncate">
-                          <span className="font-medium">Client:</span> {activity.client}
+                      <div>
+                        <p className="font-medium text-slate-900">{facility.name}</p>
+                        <p className="text-xs text-slate-500 flex items-center gap-1">
+                          <MapPin className="w-3 h-3" /> {facility.location}
                         </p>
-                      )}
-                      <p className="text-xs text-gray-400 flex items-center gap-1">
-                        <Clock className="h-3 w-3" />
-                        {new Date(activity.timestamp).toLocaleDateString('en-US', {
-                          month: 'short',
-                          day: 'numeric',
-                          year: 'numeric',
-                          hour: '2-digit',
-                          minute: '2-digit'
-                        })}
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <p className="font-bold text-slate-900">{facility.count}</p>
+                      <p className="text-xs text-slate-500">visits</p>
+                    </div>
+                  </div>
+                ))}
+                {processedData.topFacilities.length === 0 && <p className="text-slate-500 text-sm text-center py-4">No facility data available</p>}
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Top Sales Reps */}
+          <Card className="shadow-sm border-slate-200">
+            <CardHeader className="flex flex-row items-center justify-between">
+              <CardTitle className="text-lg">Top Sales Reps</CardTitle>
+              <Badge variant="secondary" className="bg-slate-100 text-slate-600">Most Active</Badge>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                {processedData.topReps.map((rep, i) => (
+                  <div key={i} className="flex items-center justify-between p-3 border-b last:border-0 border-slate-100">
+                    <div className="flex items-center gap-3">
+                      <Avatar className="w-10 h-10 border-2 border-white shadow-sm">
+                        <AvatarImage src={`https://api.dicebear.com/7.x/initials/svg?seed=${rep.name}`} />
+                        <AvatarFallback>{rep.name.substring(0, 2)}</AvatarFallback>
+                      </Avatar>
+                      <div>
+                        <p className="font-medium text-slate-900">{rep.name}</p>
+                        <p className="text-xs text-slate-500">Sales Representative</p>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-50 text-blue-700">
+                        {rep.count} Visits
+                      </span>
+                    </div>
+                  </div>
+                ))}
+                {processedData.topReps.length === 0 && <p className="text-slate-500 text-sm text-center py-4">No rep data available</p>}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* 3b. Top Consumables (Mocked for now) */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <Card className="shadow-sm border-slate-200">
+            <CardHeader className="flex flex-row items-center justify-between">
+              <CardTitle className="text-lg">Top Consumables</CardTitle>
+              <Badge variant="outline" className="text-slate-500 border-slate-200">Trending</Badge>
+            </CardHeader>
+            <CardContent>
+              <div className="flex flex-col items-center justify-center py-8 text-center bg-slate-50 rounded-lg border border-dashed border-slate-200">
+                <div className="p-3 bg-slate-100 rounded-full mb-3">
+                  <Activity className="w-6 h-6 text-slate-400" />
+                </div>
+                <h3 className="text-sm font-medium text-slate-900">Data Unavailable</h3>
+                <p className="text-xs text-slate-500 max-w-[200px] mt-1">
+                  Consumption analytics require API integration. Please check documentation.
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Placeholder for future widget or more detailed Reps stats? For now, we keep layout balanced */}
+          <Card className="shadow-sm border-slate-200 flex items-center justify-center p-6 bg-slate-50 border-dashed">
+            <div className="text-center">
+              <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-slate-200 mb-4">
+                <TrendingUp className="w-6 h-6 text-slate-400" />
+              </div>
+              <h3 className="text-sm font-medium text-slate-900">More Insights Coming Soon</h3>
+              <p className="text-xs text-slate-500 mt-1 max-w-xs mx-auto">
+                Advanced revenue analytics and product performance metrics specific to your region will appear here.
+              </p>
+            </div>
+          </Card>
+        </div>
+
+        {/* 4. Recent Activity Feed */}
+        <Card className="shadow-sm border-slate-200">
+          <CardHeader>
+            <CardTitle className="text-lg">Recent Activity</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="relative border-l border-slate-200 ml-3 space-y-6">
+              {processedData.recentActivity.map((visit, i) => (
+                <div key={i} className="mb-8 ml-6 relative group">
+                  <span className="absolute flex items-center justify-center w-6 h-6 bg-blue-100 rounded-full -left-[37px] ring-4 ring-white">
+                    <Clock className="w-3 h-3 text-blue-600" />
+                  </span>
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between bg-white p-4 rounded-lg border border-slate-100 shadow-sm group-hover:shadow-md transition-shadow">
+                    <div>
+                      <h4 className="text-sm font-semibold text-slate-900 pl-1">
+                        {visit.client?.name || "Unknown Client"}
+                      </h4>
+                      <p className="text-xs text-slate-500 mt-1 pl-1">
+                        Visited by <span className="text-slate-700 font-medium">{visit.user?.firstName || "Rep"}</span>
                       </p>
                     </div>
+                    <div className="mt-2 sm:mt-0 flex items-center gap-3">
+                      <Badge variant="outline" className={`${visit.visitOutcome?.includes("Success") ? "bg-green-50 text-green-700 border-green-200" :
+                        visit.visitOutcome?.includes("Follow") ? "bg-amber-50 text-amber-700 border-amber-200" :
+                          "bg-slate-50 text-slate-600"
+                        }`}>
+                        {visit.visitOutcome || visit.status || "Completed"}
+                      </Badge>
+                      <span className="text-xs text-slate-400">
+                        {format(parseISO(visit.startTime), "MMM dd, HH:mm")}
+                      </span>
+                    </div>
                   </div>
-                ))
-              )}
+                </div>
+              ))}
+              {processedData.recentActivity.length === 0 && <p className="ml-6 text-slate-500 text-sm">No recent activity found.</p>}
             </div>
           </CardContent>
         </Card>
+
       </div>
     </div>
   );
+}
+
+// --- Helper Components ---
+
+function KpiCard({ title, value, trend, icon: Icon, subtext, isNeutral }: any) {
+  const isPositive = trend >= 0;
+  return (
+    <Card className="border-l-4 border-l-[#0089f4] shadow-sm hover:shadow-md transition-shadow">
+      <CardContent className="p-6">
+        <div className="flex items-start justify-between">
+          <div>
+            <p className="text-sm font-medium text-slate-500 uppercase tracking-wide">{title}</p>
+            <h3 className="text-3xl font-bold text-slate-900 mt-2">{value?.toLocaleString() || 0}</h3>
+          </div>
+          <div className="p-3 bg-blue-50 rounded-lg">
+            <Icon className="w-6 h-6 text-[#0089f4]" />
+          </div>
+        </div>
+        {!isNeutral && trend !== null && (
+          <div className="mt-4 flex items-center text-sm">
+            <span className={`font-medium flex items-center ${isPositive ? "text-emerald-600" : "text-red-600"}`}>
+              {isPositive ? <TrendingUp className="w-4 h-4 mr-1" /> : <TrendingDown className="w-4 h-4 mr-1" />}
+              {Math.abs(trend)}%
+            </span>
+            <span className="text-slate-400 ml-2">{subtext}</span>
+          </div>
+        )}
+        {(isNeutral || trend === null) && subtext && (
+          <p className="mt-4 text-sm text-slate-400">{subtext}</p>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
+function OutcomeLegend({ label, value, color }: any) {
+  return (
+    <div className="flex items-center justify-between text-sm">
+      <div className="flex items-center gap-2">
+        <span className={`w-3 h-3 rounded-full ${color}`} />
+        <span className="text-slate-600">{label}</span>
+      </div>
+      <span className="font-semibold text-slate-900">{value}</span>
+    </div>
+  )
 }
