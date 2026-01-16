@@ -83,7 +83,7 @@ export default function EngineerReports({ onPageChange }: EngineerReportsProps =
 
   // Engineers
   const [engineers, setEngineers] = useState<Engineer[]>([]);
-  const [engineerSearch, setEngineerSearch] = useState<string>("");
+  const [engineerSearch, setEngineerSearch] = useState<string>(""); 
 
   // Selection for bulk operations
   const [selectedIds, setSelectedIds] = useState<Record<string, boolean>>({});

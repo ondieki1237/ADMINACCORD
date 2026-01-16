@@ -1,7 +1,22 @@
 "use client"
 
 import { useState } from "react"
-import { Home, MapPin, Users, User, Menu, LogOut, TrendingUp } from "lucide-react"
+import {
+  LayoutDashboard,
+  CalendarCheck,
+  TrendingUp,
+  Shield,
+  BarChart3,
+  FileText,
+  UserPlus,
+  Settings,
+  Package,
+  Phone,
+  Users,
+  Calendar,
+  Menu,
+  LogOut
+} from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
 import { authService } from "@/lib/auth"
@@ -16,12 +31,22 @@ export function MobileNav({ currentPage, onPageChange }: MobileNavProps) {
   const [isOpen, setIsOpen] = useState(false)
   const { toast } = useToast()
 
-  const navItems = [
-    { id: "dashboard", label: "Dashboard", icon: Home },
-    // Visits removed from mobile nav (hidden)
-    { id: "trails", label: "Trails", icon: MapPin },
-    { id: "follow-ups", label: "Follow-Ups", icon: TrendingUp },
-    { id: "profile", label: "Profile", icon: User },
+  const mainMenu = [
+    { id: "dashboard", label: "Dashboard", icon: LayoutDashboard, path: "/dashboard" },
+    { id: "daily-reports", label: "Daily Reports", icon: CalendarCheck, path: "/dashboard/daily-reports" },
+    { id: "performance", label: "Performance", icon: TrendingUp, path: "/dashboard/performance-analytics" },
+    { id: "engineer-reports", label: "Engineer Reports", icon: Shield, path: "/dashboard/engineer-reports" },
+    { id: "advanced-analytics", label: "Analytics", icon: BarChart3, path: "/dashboard/advanced-analytics" },
+    { id: "reports", label: "Weekly Reports", icon: FileText, path: "/dashboard/reports" },
+  ]
+
+  const quickActions = [
+    { id: "leads", label: "Leads", icon: UserPlus, path: "/dashboard/leads" },
+    { id: "machines", label: "Machines", icon: Settings, path: "/dashboard/machines" },
+    { id: "consumables", label: "Consumables", icon: Package, path: "/dashboard/consumables" },
+    { id: "telesales", label: "Telesales", icon: Phone, path: "/dashboard/telesales" },
+    { id: "user-manager", label: "Users", icon: Users, path: "/dashboard/user-manager" },
+    { id: "planners", label: "Planners", icon: Calendar, path: "/dashboard/planners" },
   ]
 
   const handleLogout = async () => {
@@ -58,24 +83,58 @@ export function MobileNav({ currentPage, onPageChange }: MobileNavProps) {
                 <div className="py-4">
                   <h2 className="text-lg font-semibold text-primary">ACCORD</h2>
                 </div>
-                <nav className="flex-1 space-y-2">
-                  {navItems.map((item) => {
-                    const Icon = item.icon
-                    return (
-                      <Button
-                        key={item.id}
-                        variant={currentPage === item.id ? "default" : "ghost"}
-                        className={`w-full justify-start ${currentPage === item.id ? "" : "neumorphic-button"}`}
-                        onClick={() => {
-                          onPageChange(item.id)
-                          setIsOpen(false)
-                        }}
-                      >
-                        <Icon className="mr-2 h-4 w-4" />
-                        {item.label}
-                      </Button>
-                    )
-                  })}
+                <nav className="flex-1 overflow-y-auto pr-2">
+                  <div className="mb-4">
+                    <p className="px-3 text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">
+                      Main Menu
+                    </p>
+                    <div className="space-y-1">
+                      {mainMenu.map((item) => {
+                        const Icon = item.icon
+                        const isActive = currentPage === item.id
+                        return (
+                          <Button
+                            key={item.id}
+                            variant={isActive ? "default" : "ghost"}
+                            className={`w-full justify-start h-10 ${isActive ? "bg-[#0089f4] text-white" : "text-gray-600 hover:bg-blue-50 hover:text-[#0089f4]"}`}
+                            onClick={() => {
+                              onPageChange(item.id)
+                              setIsOpen(false)
+                            }}
+                          >
+                            <Icon className="mr-3 h-4 w-4" />
+                            <span className="text-sm font-medium">{item.label}</span>
+                          </Button>
+                        )
+                      })}
+                    </div>
+                  </div>
+
+                  <div className="mb-4">
+                    <p className="px-3 text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">
+                      Quick Actions
+                    </p>
+                    <div className="space-y-1">
+                      {quickActions.map((item) => {
+                        const Icon = item.icon
+                        const isActive = currentPage === item.id
+                        return (
+                          <Button
+                            key={item.id}
+                            variant={isActive ? "default" : "ghost"}
+                            className={`w-full justify-start h-10 ${isActive ? "bg-[#0089f4] text-white" : "text-gray-600 hover:bg-blue-50 hover:text-[#0089f4]"}`}
+                            onClick={() => {
+                              onPageChange(item.id)
+                              setIsOpen(false)
+                            }}
+                          >
+                            <Icon className="mr-3 h-4 w-4" />
+                            <span className="text-sm font-medium">{item.label}</span>
+                          </Button>
+                        )
+                      })}
+                    </div>
+                  </div>
                 </nav>
                 <div className="pt-4 border-t">
                   <Button
@@ -93,28 +152,6 @@ export function MobileNav({ currentPage, onPageChange }: MobileNavProps) {
         </div>
       </div>
 
-      {/* Bottom Navigation for Mobile */}
-      <div className="lg:hidden fixed bottom-0 left-0 right-0 bg-background">
-        <div className="neumorphic-card mx-2 mb-2 rounded-t-lg">
-          <div className="grid grid-cols-4 gap-1 p-2">
-            {navItems.map((item) => {
-              const Icon = item.icon
-              return (
-                <Button
-                  key={item.id}
-                  variant={currentPage === item.id ? "default" : "ghost"}
-                  size="sm"
-                  className={`flex flex-col h-auto py-3 px-1 ${currentPage === item.id ? "" : "neumorphic-button"}`}
-                  onClick={() => onPageChange(item.id)}
-                >
-                  <Icon className="h-4 w-4 mb-1" />
-                  <span className="text-xs">{item.label}</span>
-                </Button>
-              )
-            })}
-          </div>
-        </div>
-      </div>
     </>
   )
 }

@@ -5,7 +5,6 @@ import { MobileNav } from '@/components/layout/mobile-nav'
 import { PWAInstall } from '@/components/mobile/pwa-install'
 import { OfflineIndicator } from '@/components/mobile/offline-indicator'
 import { MobileOptimizations } from '@/components/mobile/mobile-optimizations'
-import { TouchGestures } from '@/components/mobile/touch-gestures'
 import { Toaster } from '@/components/ui/toaster'
 import { useState, useEffect } from 'react'
 import { authService } from '@/lib/auth'
@@ -30,14 +29,6 @@ export default function DashboardLayout({
       router.push('/')
     }
   }, [router])
-
-  const handleSwipeLeft = () => {
-    // Navigation logic can be handled here if needed
-  }
-
-  const handleSwipeRight = () => {
-    // Navigation logic can be handled here if needed
-  }
 
   if (isLoading) {
     return (
@@ -66,14 +57,12 @@ export default function DashboardLayout({
       {/* Mobile Navigation */}
       <MobileNav currentPage={currentPage} onPageChange={setCurrentPage} />
 
-      <TouchGestures onSwipeLeft={handleSwipeLeft} onSwipeRight={handleSwipeRight}>
-        {/* Main Content with offset for sidebar on desktop */}
-        <main className="lg:pl-64 min-h-screen">
-          <div className="pb-16 lg:pb-0">
-            {children}
-          </div>
-        </main>
-      </TouchGestures>
+      {/* Main Content with offset for sidebar on desktop */}
+      <main className="lg:pl-64 min-h-screen">
+        <div className="pb-16 lg:pb-0">
+          {children}
+        </div>
+      </main>
 
       <Toaster />
     </div>
