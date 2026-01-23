@@ -24,7 +24,8 @@ import {
   Star,
   CalendarCheck,
   Package,
-  Phone
+  Phone,
+  ClipboardList
 } from "lucide-react";
 
 interface DashboardSidebarProps {
@@ -102,6 +103,20 @@ export function DashboardSidebar({ currentPage = "dashboard", onPageChange }: Da
       label: "Weekly Reports",
       path: "/dashboard/reports",
       color: "text-blue-600",
+      bgColor: "bg-blue-50"
+    },
+    {
+      icon: FileText,
+      label: "Documentations",
+      path: "/dashboard/machine-documents",
+      color: "text-orange-600",
+      bgColor: "bg-orange-50"
+    },
+    {
+      icon: ClipboardList,
+      label: "Service Requests",
+      path: "/dashboard/service-requests",
+      color: "text-blue-700",
       bgColor: "bg-blue-50"
     },
   ];

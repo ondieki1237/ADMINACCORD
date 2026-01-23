@@ -1,5 +1,5 @@
 import { authService } from "./auth"
-import type { Visit } from "./types/visits"
+import type { Visit as VisitType } from "./types/visits"
 
 // Determine API base URL:
 // Priority: NEXT_PUBLIC_API_BASE_URL env var (useful for local override)
@@ -382,9 +382,9 @@ class ApiService {
       date: visitData.date,
       startTime: visitData.startTime,
       client: {
-        name: visitData.client.name,
-        type: visitData.client.type,
-        location: visitData.client.location,
+        name: visitData.client?.name || "",
+        type: visitData.client?.type || "",
+        location: visitData.client?.location || "",
       },
       visitPurpose: visitData.visitPurpose,
       contacts: (visitData.contacts || []).map(c => ({
@@ -780,6 +780,75 @@ class ApiService {
   }
   async getVisitContactsMapped(visitId: string): Promise<any> {
     return this.makeRequest(`/visits/${encodeURIComponent(visitId)}/contacts-mapped`);
+  }
+
+  // Machine Documents endpoints
+  async getMachineDocuments(machineId?: string): Promise<any> {
+    const params = machineId ? `?machineId=${encodeURIComponent(machineId)}` : "";
+    return this.makeRequest(`/machine-documents${params}`);
+  }
+
+  async uploadMachineDocument(formData: FormData): Promise<any> {
+    let token = authService.getAccessToken();
+    const fullUrl = `${API_BASE_URL}/machine-documents`;
+
+    const response = await fetch(fullUrl, {
+      method: "POST",
+      headers: {
+        ...(token && { Authorization: `Bearer ${token}` }),
+        // Note: Do not set Content-Type for FormData, the browser will set it with the correct boundary
+      },
+      body: formData,
+    });
+
+    if (!response.ok) {
+      throw new Error("Upload failed");
+    }
+
+    return response.json();
+  }
+
+  async deleteMachineDocument(id: string): Promise<any> {
+    return this.makeRequest(`/machine-documents/${encodeURIComponent(id)}`, {
+      method: "DELETE",
+    });
+  }
+
+  // Engineering Requests API
+  async getEngineeringRequests(page = 1, limit = 20, filters: Record<string, any> = {}): Promise<any> {
+    const params = new URLSearchParams({
+      page: String(page),
+      limit: String(limit),
+      _t: String(Date.now())
+    });
+    Object.entries(filters).forEach(([k, v]) => {
+      if (v !== undefined && v !== null && v !== "") params.set(k, String(v));
+    });
+    return this.makeRequest(`/admin/engineering-requests?${params.toString()}`);
+  }
+
+  async getEngineeringRequestById(id: string): Promise<any> {
+    return this.makeRequest(`/admin/engineering-requests/${encodeURIComponent(id)}`);
+  }
+
+  async assignEngineeringRequest(requestId: string, engineerId: string): Promise<any> {
+    return this.makeRequest(`/admin/engineering-requests/${encodeURIComponent(requestId)}/assign`, {
+      method: "PUT",
+      body: JSON.stringify({ engineerId }),
+    });
+  }
+
+  async updateEngineeringRequestStatus(requestId: string, status: string): Promise<any> {
+    return this.makeRequest(`/admin/engineering-requests/${encodeURIComponent(requestId)}/status`, {
+      method: "PUT",
+      body: JSON.stringify({ status }),
+    });
+  }
+
+  async deleteEngineeringRequest(requestId: string): Promise<any> {
+    return this.makeRequest(`/admin/engineering-requests/${encodeURIComponent(requestId)}`, {
+      method: "DELETE",
+    });
   }
 }
 

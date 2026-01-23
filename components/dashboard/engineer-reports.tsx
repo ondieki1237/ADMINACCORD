@@ -36,6 +36,7 @@ interface Service {
   status?: string;
   userId?: { firstName: string; lastName: string };
   nextServiceDate?: string;
+  notes?: string;
   syncedAt?: string;
   createdAt?: string;
   updatedAt?: string;
@@ -83,7 +84,7 @@ export default function EngineerReports({ onPageChange }: EngineerReportsProps =
 
   // Engineers
   const [engineers, setEngineers] = useState<Engineer[]>([]);
-  const [engineerSearch, setEngineerSearch] = useState<string>(""); 
+  const [engineerSearch, setEngineerSearch] = useState<string>("");
 
   // Selection for bulk operations
   const [selectedIds, setSelectedIds] = useState<Record<string, boolean>>({});
@@ -109,6 +110,10 @@ export default function EngineerReports({ onPageChange }: EngineerReportsProps =
   // Engineer Picker Modal
   const [showEngineerPicker, setShowEngineerPicker] = useState(false);
   const [pickerMode, setPickerMode] = useState<'duty' | 'assign'>('duty');
+
+  // View Details Modal
+  const [showViewService, setShowViewService] = useState(false);
+  const [selectedServiceForView, setSelectedServiceForView] = useState<Service | null>(null);
 
   // Fetch services
   const fetchServices = async () => {
@@ -157,7 +162,7 @@ export default function EngineerReports({ onPageChange }: EngineerReportsProps =
         const json = await res.json();
         if (json?.success && Array.isArray(json.data)) {
           // Filter only engineers
-          const engineerUsers = json.data.filter((u: any) => u.role === 'engineer');
+          const engineerUsers = json.data.filter((u: any) => u.role?.toLowerCase() === 'engineer');
           setEngineers(engineerUsers);
         }
       } catch (err) {
@@ -666,6 +671,10 @@ export default function EngineerReports({ onPageChange }: EngineerReportsProps =
                           variant="outline"
                           className="hover:bg-[#008cf7]/10 hover:border-[#008cf7]"
                           title="View Details"
+                          onClick={() => {
+                            setSelectedServiceForView(service);
+                            setShowViewService(true);
+                          }}
                         >
                           <Eye className="h-4 w-4" />
                         </Button>
@@ -1017,6 +1026,130 @@ export default function EngineerReports({ onPageChange }: EngineerReportsProps =
                   ))
                 )}
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* View Service Details Modal */}
+      {showViewService && selectedServiceForView && (
+        <div className="fixed inset-0 backdrop-blur-sm bg-black/30 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+            <div className="bg-gradient-to-r from-[#008cf7] to-[#006bb8] text-white p-6">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-3">
+                  <div className="bg-white/20 p-2 rounded-lg">
+                    <FileText className="h-6 w-6 text-white" />
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-bold">Service Details</h3>
+                    <p className="text-white/80 text-sm">
+                      Ref: {selectedServiceForView._id.slice(-8).toUpperCase()}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setShowViewService(false)}
+                  className="hover:bg-white/20 rounded-lg p-2 transition-colors"
+                >
+                  <XCircle className="h-6 w-6" />
+                </button>
+              </div>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-8 space-y-8">
+              {/* Status Badge */}
+              <div className="flex items-center justify-between">
+                <div>
+                  <span className={`inline-flex items-center px-4 py-1.5 rounded-full text-sm font-bold border-2 ${getStatusColor(selectedServiceForView.status)}`}>
+                    {selectedServiceForView.status?.toUpperCase() || 'PENDING'}
+                  </span>
+                </div>
+                <div className="text-sm text-gray-500 font-medium">
+                  {new Date(selectedServiceForView.date).toLocaleDateString(undefined, { dateStyle: 'full' })}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                {/* Facility & Machine */}
+                <div className="space-y-6">
+                  <section>
+                    <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3 flex items-center gap-2">
+                      <MapPin className="h-4 w-4" />
+                      Facility Information
+                    </h4>
+                    <div className="bg-gray-50 rounded-xl p-4 border border-gray-100">
+                      <p className="font-bold text-gray-900 text-lg">{selectedServiceForView.facility?.name}</p>
+                      <p className="text-gray-600 mt-1">{selectedServiceForView.facility?.location}</p>
+                    </div>
+                  </section>
+
+                  <section>
+                    <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3 flex items-center gap-2">
+                      <Wrench className="h-4 w-4" />
+                      Machine Details
+                    </h4>
+                    <div className="bg-gray-50 rounded-xl p-4 border border-gray-100 italic">
+                      {selectedServiceForView.machineDetails || "No machine details provided."}
+                    </div>
+                  </section>
+                </div>
+
+                {/* Assignment & Info */}
+                <div className="space-y-6">
+                  <section>
+                    <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3 flex items-center gap-2">
+                      <User className="h-4 w-4" />
+                      Personnel
+                    </h4>
+                    <div className="bg-[#008cf7]/5 rounded-xl p-4 border border-[#008cf7]/10">
+                      <p className="text-xs text-[#008cf7] font-bold mb-1">Engineer in Charge</p>
+                      <p className="font-bold text-gray-900 text-lg">
+                        {selectedServiceForView.engineerInCharge?.name || "Unassigned"}
+                      </p>
+                      {selectedServiceForView.engineerInCharge?.phone && (
+                        <p className="text-sm text-gray-600 mt-1">{selectedServiceForView.engineerInCharge.phone}</p>
+                      )}
+                    </div>
+                  </section>
+
+                  <section>
+                    <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3 flex items-center gap-2">
+                      <Clock className="h-4 w-4" />
+                      Service Type
+                    </h4>
+                    <div className="bg-gray-50 rounded-xl p-4 border border-gray-100">
+                      <span className={`px-3 py-1 rounded-full text-xs font-bold border uppercase ${getDutyTypeColor(selectedServiceForView.serviceType)}`}>
+                        {selectedServiceForView.serviceType}
+                      </span>
+                      {selectedServiceForView.nextServiceDate && (
+                        <p className="text-xs text-gray-500 mt-3 font-medium">
+                          Next Service: {new Date(selectedServiceForView.nextServiceDate).toLocaleDateString()}
+                        </p>
+                      )}
+                    </div>
+                  </section>
+                </div>
+              </div>
+
+              {/* Notes Section */}
+              <section>
+                <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3 flex items-center gap-2">
+                  <FileText className="h-4 w-4" />
+                  Notes & Findings
+                </h4>
+                <div className="bg-gray-50 rounded-xl p-5 border border-gray-100 min-h-[120px] whitespace-pre-wrap text-gray-700 leading-relaxed font-medium">
+                  {selectedServiceForView.notes || "No additional notes for this service."}
+                </div>
+              </section>
+            </div>
+
+            <div className="p-6 bg-gray-50 border-t border-gray-100 flex justify-end space-x-3">
+              <Button
+                onClick={() => setShowViewService(false)}
+                className="bg-gray-900 hover:bg-black text-white px-8 h-12 rounded-xl font-bold"
+              >
+                Close
+              </Button>
             </div>
           </div>
         </div>

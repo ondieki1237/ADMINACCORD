@@ -15,7 +15,8 @@ import {
   Users,
   Calendar,
   Menu,
-  LogOut
+  LogOut,
+  ClipboardList
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
@@ -38,6 +39,8 @@ export function MobileNav({ currentPage, onPageChange }: MobileNavProps) {
     { id: "engineer-reports", label: "Engineer Reports", icon: Shield, path: "/dashboard/engineer-reports" },
     { id: "advanced-analytics", label: "Analytics", icon: BarChart3, path: "/dashboard/advanced-analytics" },
     { id: "reports", label: "Weekly Reports", icon: FileText, path: "/dashboard/reports" },
+    { id: "machine-documents", label: "Documentations", icon: FileText, path: "/dashboard/machine-documents" },
+    { id: "service-requests", label: "Service Requests", icon: ClipboardList, path: "/dashboard/service-requests" },
   ]
 
   const quickActions = [
