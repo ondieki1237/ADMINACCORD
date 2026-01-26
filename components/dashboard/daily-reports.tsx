@@ -1,21 +1,20 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { format } from "date-fns";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { 
-  CalendarCheck, 
-  Users, 
-  MapPin, 
-  Clock, 
-  TrendingUp, 
-  CheckCircle, 
-  AlertCircle, 
+import {
+  CalendarCheck,
+  Users,
+  MapPin,
+  Clock,
+  CheckCircle,
+  AlertCircle,
   RefreshCw,
   Search,
   Filter,
@@ -24,7 +23,7 @@ import {
   ChevronRight,
   Phone,
   Mail,
-  DollarSign
+  DollarSign,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiService } from "@/lib/api";
@@ -40,28 +39,50 @@ interface Client {
   location: string;
 }
 
-interface User {
-  _id: string;
-  firstName: string;
-  lastName: string;
-  email: string;
-  employeeId: string;
-  region: string;
-  role: string;
-}
-
 interface Visit {
   _id: string;
-  userId: User;
-  client: Client;
-  contacts: Contact[];
-  visitOutcome: string;
+  visitId?: string;
+  userId: any;
   date: string;
-  duration: number;
-  totalPotentialValue: number;
-  notes: string;
-  tags: string[];
-  createdAt: string;
+  startTime?: string;
+  endTime?: string;
+  duration?: number;
+  client?: {
+    name?: string;
+    type?: string;
+    level?: string;
+    location?: string;
+  };
+  contacts?: Array<{
+    name?: string;
+    role?: string;
+    phone?: string;
+    email?: string;
+    department?: string;
+    notes?: string;
+    followUpRequired?: boolean;
+    priority?: string;
+  }>;
+  productsOfInterest?: Array<{ name?: string; notes?: string }>;
+  existingEquipment?: Array<{ name?: string; model?: string; brand?: string; quantity?: number; condition?: string }>;
+  requestedEquipment?: Array<Record<string, any>>;
+  visitPurpose?: string;
+  visitOutcome?: string;
+  competitorActivity?: string;
+  marketInsights?: string;
+  notes?: string;
+  customData?: any;
+  nextVisitDate?: string;
+  attachments?: Array<{ filename?: string; originalName?: string; path?: string; mimeType?: string; size?: number; uploadedAt?: string }>;
+  photos?: Array<{ filename?: string; description?: string; path?: string; uploadedAt?: string }>;
+  tags?: string[];
+  isFollowUpRequired?: boolean;
+  followUpActions?: Array<Record<string, any>>;
+  followUpVisits?: string[];
+  totalPotentialValue?: number;
+  syncedAt?: string;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 interface Summary {
@@ -99,11 +120,15 @@ export default function DailyReports() {
   const [exportEndDate, setExportEndDate] = useState<string>("");
   const [isExporting, setIsExporting] = useState<boolean>(false);
 
+  // user summary states
+  const [showUserSummary, setShowUserSummary] = useState(false);
+  const [selectedUserId, setSelectedUserId] = useState<string>("");
+  const [isGeneratingSummary, setIsGeneratingSummary] = useState(false);
+
   // Fetch daily visits
   const { data, isLoading, error, refetch } = useQuery<ApiResponse>({
     queryKey: ["dailyReports", selectedDate, regionFilter, outcomeFilter, currentPage],
     queryFn: async () => {
-      // Use centralized apiService which respects NEXT_PUBLIC_API_BASE_URL and local dev hosts
       const params: any = {
         page: currentPage,
         limit: 20,
@@ -115,9 +140,25 @@ export default function DailyReports() {
       const result = await apiService.getAdminDailyActivities(params as any);
       return result;
     },
-    enabled: typeof window !== 'undefined',
+    enabled: typeof window !== "undefined",
     staleTime: 1000 * 60 * 2,
   });
+
+  // Fetch users for selector (large limit but controlled)
+  const { data: usersResp } = useQuery({
+    queryKey: ["users", "all"],
+    queryFn: async () => {
+      try {
+        const res = await apiService.getUsers({ page: 1, limit: 1000 });
+        return res;
+      } catch (err) {
+        return null;
+      }
+    },
+    staleTime: 1000 * 60 * 5,
+  });
+
+  const usersList: any[] = (usersResp && (usersResp.data || usersResp.users || usersResp.docs)) || [];
 
   const handleRefresh = () => {
     refetch();
@@ -129,7 +170,6 @@ export default function DailyReports() {
 
   const handleExportCSV = async () => {
     try {
-      // Determine date range for export
       let start = exportStartDate;
       let end = exportEndDate;
       if (!start && !end && selectedDate) {
@@ -137,41 +177,22 @@ export default function DailyReports() {
         end = selectedDate;
       }
       if (!start && !end) {
-        toast({ title: "Date range required", description: "Please select a start or end date (or choose a single date).", variant: 'destructive' as any });
+        toast({ title: "Date range required", description: "Please select a start or end date (or choose a single date).", variant: "destructive" as any });
         return;
       }
 
       setIsExporting(true);
 
-      const filters: any = {
-        page: 1,
-        limit: 10000,
-      };
+      const filters: any = { page: 1, limit: 10000 };
       if (start) filters.startDate = start;
       if (end) filters.endDate = end;
 
       const resp = await apiService.getAdminVisits(filters);
       const visits: Visit[] = resp?.data || [];
 
-      // CSV header
       const header = [
-        'Visit ID',
-        'Date',
-        'User FirstName',
-        'User LastName',
-        'EmployeeId',
-        'Region',
-        'Client Name',
-        'Client Location',
-        'Contacts',
-        'Outcome',
-        'Duration',
-        'PotentialValue',
-        'Notes',
-        'Tags',
-        'Created At'
+        'Visit ID','Date','User FirstName','User LastName','EmployeeId','Region','Client Name','Client Location','Contacts','Outcome','Duration','PotentialValue','Notes','Tags','Created At'
       ];
-
       const escape = (v: any) => {
         if (v === undefined || v === null) return '';
         const s = String(v);
@@ -182,21 +203,7 @@ export default function DailyReports() {
         const contacts = (v.contacts || []).map(c => `${c.name || ''} (${c.position || ''}) ${c.phone || ''}`).join('; ');
         const tags = (v.tags || []).join('; ');
         return [
-          escape(v._id),
-          escape(v.date),
-          escape(v.userId?.firstName),
-          escape(v.userId?.lastName),
-          escape((v.userId as any)?.employeeId),
-          escape((v.userId as any)?.region),
-          escape(v.client?.name),
-          escape(v.client?.location),
-          escape(contacts),
-          escape(v.visitOutcome),
-          escape(v.duration),
-          escape((v as any).totalPotentialValue),
-          escape(v.notes),
-          escape(tags),
-          escape(v.createdAt),
+          escape(v._id),escape(v.date),escape(v.userId?.firstName),escape(v.userId?.lastName),escape((v.userId as any)?.employeeId),escape((v.userId as any)?.region),escape(v.client?.name),escape(v.client?.location),escape(contacts),escape(v.visitOutcome),escape(v.duration),escape((v as any).totalPotentialValue),escape(v.notes),escape(tags),escape(v.createdAt)
         ].join(',');
       });
 
@@ -204,8 +211,8 @@ export default function DailyReports() {
       const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
-      const startLabel = start ? start.replace(/-/g, '') : 'start';
-      const endLabel = end ? end.replace(/-/g, '') : 'end';
+      const startLabel = (exportStartDate || selectedDate || 'start').replace(/-/g, '');
+      const endLabel = (exportEndDate || selectedDate || 'end').replace(/-/g, '');
       a.href = url;
       a.download = `daily-visits-${startLabel}-${endLabel}.csv`;
       document.body.appendChild(a);
@@ -219,6 +226,152 @@ export default function DailyReports() {
       toast({ title: 'Export failed', description: err?.message || 'An error occurred', variant: 'destructive' as any });
     } finally {
       setIsExporting(false);
+    }
+  };
+
+  const handleCreateUserSummary = async () => {
+    if (!selectedUserId) {
+      toast({ title: 'Select user', description: 'Please select a single user to generate summary', variant: 'destructive' as any });
+      return;
+    }
+
+    let start = exportStartDate;
+    let end = exportEndDate;
+    if (!start && !end && selectedDate) {
+      start = selectedDate;
+      end = selectedDate;
+    }
+    if (!start && !end) {
+      toast({ title: 'Date range required', description: 'Please select a start or end date (or choose a single date).', variant: 'destructive' as any });
+      return;
+    }
+
+    setIsGeneratingSummary(true);
+    let visits: Visit[] = [];
+
+    try {
+      const resp = await apiService.getAdminVisitsByUser(selectedUserId, {
+        page: 1,
+        limit: 10000,
+        startDate: start,
+        endDate: end,
+      });
+      visits = resp?.data || [];
+    } catch (errPrimary: any) {
+      console.error('Primary user visits fetch failed', errPrimary);
+      try {
+        const resp2 = await apiService.getAdminVisits({ page: 1, limit: 10000, userId: selectedUserId, startDate: start, endDate: end });
+        visits = resp2?.data || [];
+      } catch (errFallback: any) {
+        console.error('Fallback user visits fetch failed', errFallback);
+        toast({ title: 'Summary failed', description: errFallback?.message || errPrimary?.message || 'Failed to fetch user visits', variant: 'destructive' as any });
+        setIsGeneratingSummary(false);
+        return;
+      }
+    }
+
+    try {
+      const totalVisits = visits.length;
+      const visitsByOutcome: Record<string, number> = {};
+      let totalDuration = 0;
+      let totalPotential = 0;
+
+      visits.forEach((v) => {
+        const key = (v.visitOutcome || 'unknown').toLowerCase();
+        visitsByOutcome[key] = (visitsByOutcome[key] || 0) + 1;
+        totalDuration += Number(v.duration || 0);
+        totalPotential += Number((v as any).totalPotentialValue || 0);
+      });
+
+      const headerSummary = [
+        ['User', selectedUserId],
+        ['StartDate', start || ''],
+        ['EndDate', end || ''],
+        ['TotalVisits', String(totalVisits)],
+        ['TotalDurationMinutes', String(totalDuration)],
+        ['TotalPotentialValue', String(totalPotential)],
+      ];
+
+      const outcomeLines = Object.entries(visitsByOutcome).map(([k, v]) => [k, String(v)]);
+
+      const visitHeader = [
+        'UserFirst','UserLast',
+        'ClientName','ClientType','ClientLevel','ClientLocation',
+        'ContactNames','ContactPhones','ContactRoles','ProductsOfInterest',
+        'VisitPurpose','VisitOutcome','CompetitorActivity','MarketInsights','Notes','CustomData',
+        'NextVisitDate','Attachments','Photos','Tags','IsFollowUpRequired','FollowUpActions','FollowUpVisits',
+        'TotalPotentialValue','SyncedAt','CreatedAt','UpdatedAt'
+      ];
+
+      const escape = (v: any) => {
+        if (v === undefined || v === null) return '';
+        const s = String(v);
+        return `"${s.replace(/"/g, '""')}"`;
+      };
+
+      const visitRows = visits.map((v) => [
+        escape((v.userId && (v.userId.firstName || '')) || ''),
+        escape((v.userId && (v.userId.lastName || '')) || ''),
+
+        escape(v.client?.name || ''),
+        escape(v.client?.type || ''),
+        escape(v.client?.level || ''),
+        escape(v.client?.location || ''),
+
+        // contacts split into three columns: names, phones, roles
+        escape((v.contacts || []).map(c => c.name || '').join('; ')),
+        escape((v.contacts || []).map(c => c.phone || '').join('; ')),
+        escape((v.contacts || []).map(c => c.role || '').join('; ')),
+        escape(JSON.stringify(v.productsOfInterest || [])),
+
+        escape(v.visitPurpose || ''),
+        escape(v.visitOutcome || ''),
+        escape(v.competitorActivity || ''),
+        escape(v.marketInsights || ''),
+        escape(v.notes || ''),
+        escape(JSON.stringify(v.customData || '')),
+
+        escape(v.nextVisitDate || ''),
+        escape(JSON.stringify(v.attachments || [])),
+        escape(JSON.stringify(v.photos || [])),
+        escape((v.tags || []).join('; ')),
+        escape(String(!!v.isFollowUpRequired)),
+        escape(JSON.stringify(v.followUpActions || [])),
+        escape((v.followUpVisits || []).join('; ')),
+
+        escape((v as any).totalPotentialValue || ''),
+        escape(v.syncedAt || ''),
+        escape(v.createdAt || ''),
+        escape(v.updatedAt || ''),
+      ].join(','));
+
+      const summaryCsvLines = [
+        ...headerSummary.map((r) => r.join(',')),
+        ...outcomeLines.map((r) => r.join(',')),
+        '',
+        visitHeader.join(','),
+        ...visitRows,
+      ];
+
+      const csv = summaryCsvLines.join('\n');
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      const startLabel = start ? start.replace(/-/g, '') : 'start';
+      const endLabel = end ? end.replace(/-/g, '') : 'end';
+      a.href = url;
+      a.download = `user-summary-${selectedUserId}-${startLabel}-${endLabel}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+
+      toast({ title: 'Summary created', description: `Generated summary for ${visits.length} visits` });
+    } catch (err: any) {
+      console.error('Summary build error', err);
+      toast({ title: 'Summary failed', description: err?.message || 'An error occurred', variant: 'destructive' as any });
+    } finally {
+      setIsGeneratingSummary(false);
     }
   };
 
@@ -329,6 +482,14 @@ export default function DailyReports() {
               >
                 <Download className="h-4 w-4" />
                 {isExporting ? "Exporting..." : "Export CSV"}
+              </Button>
+              <Button
+                onClick={() => setShowUserSummary((s) => !s)}
+                variant="ghost"
+                className="gap-2"
+              >
+                <Users className="h-4 w-4" />
+                Create User Summary
               </Button>
             </div>
           </div>
@@ -458,6 +619,38 @@ export default function DailyReports() {
                 </div>
               </div>
             </div>
+            {showUserSummary && (
+              <div className="mt-4">
+                <label className="text-sm font-medium text-gray-700 mb-2 block">Select User (only one)</label>
+                <div className="flex items-center gap-2">
+                  <select
+                    className="border rounded px-3 py-2"
+                    value={selectedUserId}
+                    onChange={(e) => setSelectedUserId(e.target.value)}
+                  >
+                    <option value="">-- choose user --</option>
+                    {usersList.length > 0 ? (
+                      usersList.map((u: any) => (
+                        <option key={u._id || u.id} value={u._id || u.id}>{u.firstName} {u.lastName} — {u.employeeId || ''}</option>
+                      ))
+                    ) : (
+                      // Fallback: build from visits if users endpoint is unavailable
+                      Array.from(new Map((data?.data || []).map((v) => [v.userId?._id || (v.userId && v.userId.id) || `${v.userId?.firstName}_${v.userId?.lastName}`, v.userId])).values() as any).map((u: any) => (
+                        <option key={u._id || u.id || `${u.firstName}_${u.lastName}`} value={u._id || u.id || ''}>{u.firstName} {u.lastName} — {u.employeeId || ''}</option>
+                      ))
+                    )}
+                  </select>
+                  <Button
+                    onClick={async () => {
+                      await handleCreateUserSummary();
+                    }}
+                    disabled={isGeneratingSummary}
+                  >
+                    {isGeneratingSummary ? 'Generating...' : 'Generate Summary'}
+                  </Button>
+                </div>
+              </div>
+            )}
           </CardContent>
         </Card>
 
