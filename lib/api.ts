@@ -273,6 +273,14 @@ class ApiService {
     return this.getUsers({ role: 'engineer' });
   }
 
+  // Admin: trigger password recovery / temporary password creation for a user
+  async recoverUserPassword(userId: string, payload: { method?: string } = {}): Promise<any> {
+    return this.makeRequest(`/admin/users/${encodeURIComponent(userId)}/recover-password`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  }
+
   // Trail route snapping
   async snapTrailToRoads(trailId: string): Promise<any> {
     return this.makeRequest(`/trails/${trailId}/snap-route`, {

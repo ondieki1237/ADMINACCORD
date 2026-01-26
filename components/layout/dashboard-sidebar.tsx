@@ -18,6 +18,7 @@ import {
   Calendar,
   BarChart3,
   Shield,
+  Key,
   ChevronLeft,
   ChevronRight,
   LogOut,
@@ -156,6 +157,13 @@ export function DashboardSidebar({ currentPage = "dashboard", onPageChange }: Da
       path: "/dashboard/user-manager",
       color: "text-green-600",
       bgColor: "bg-green-50"
+    },
+    {
+      icon: Key,
+      label: "Reset Password",
+      path: "/dashboard/reset-password",
+      color: "text-red-600",
+      bgColor: "bg-red-50"
     },
     {
       icon: Calendar,
