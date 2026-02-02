@@ -4,6 +4,7 @@ import React, { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiService } from "@/lib/api";
 import { authService } from "@/lib/auth";
+import { hasAdminAccess } from "@/lib/permissions";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -40,8 +41,8 @@ interface MachineDocument {
     fileSize: number;
     driveFileId: string;
     webViewLink: string;
-    machineId?: string;
-    notes?: string;
+    linkUrl?: string;
+        // machineId and notes removed
     uploadedBy: {
         _id: string;
         firstName: string;
@@ -51,11 +52,23 @@ interface MachineDocument {
 }
 
 export default function MachineDocumentsPage() {
+    const currentUser = authService.getCurrentUserSync();
+    const isAdmin = hasAdminAccess(currentUser);
     const [searchQuery, setSearchQuery] = useState("");
     const [isUploadOpen, setIsUploadOpen] = useState(false);
     const [uploadFile, setUploadFile] = useState<File | null>(null);
-    const [machineId, setMachineId] = useState("");
-    const [notes, setNotes] = useState("");
+    const [isLinkMode, setIsLinkMode] = useState(false);
+    const [linkUrl, setLinkUrl] = useState("");
+    const [linkTitle, setLinkTitle] = useState("");
+    
+    const [categories, setCategories] = useState<any[]>([]);
+    const [manufacturers, setManufacturers] = useState<any[]>([]);
+    const [selectedCategory, setSelectedCategory] = useState<string>("");
+    const [selectedManufacturer, setSelectedManufacturer] = useState<string>("");
+    const [showCreateCategory, setShowCreateCategory] = useState(false);
+    const [showCreateManufacturer, setShowCreateManufacturer] = useState(false);
+    const [createCategoryName, setCreateCategoryName] = useState("");
+    const [createManufacturerName, setCreateManufacturerName] = useState("");
     const { toast } = useToast();
     const queryClient = useQueryClient();
 
@@ -65,6 +78,19 @@ export default function MachineDocumentsPage() {
             const response = await apiService.getMachineDocuments();
             return response.data || [];
         }
+    });
+
+    // fetch categories & manufacturers for selection
+    const { data: catResp } = useQuery({
+        queryKey: ["document-categories"],
+        queryFn: async () => (await apiService.getDocumentCategories()).data || [],
+        onSuccess: (d: any) => setCategories(d || []),
+    });
+
+    const { data: manResp } = useQuery({
+        queryKey: ["manufacturers"],
+        queryFn: async () => (await apiService.getManufacturers()).data || [],
+        onSuccess: (d: any) => setManufacturers(d || []),
     });
 
     const uploadMutation = useMutation({
@@ -86,6 +112,37 @@ export default function MachineDocumentsPage() {
                 description: err.message || "An error occurred during upload",
                 variant: "destructive",
             });
+        }
+    });
+
+    const createLinkMutation = useMutation({
+        mutationFn: async (payload: any) => apiService.createMachineDocumentLink(payload),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ["machine-documents"] });
+            toast({ title: "Success", description: "Document link created" });
+            setIsUploadOpen(false);
+            resetUploadForm();
+        },
+        onError: (err: any) => {
+            toast({ title: "Failed", description: err.message || "Failed to create link", variant: 'destructive' });
+        }
+    });
+
+    const createCategoryMutation = useMutation({
+        mutationFn: async (payload: any) => apiService.createDocumentCategory(payload),
+        onSuccess: (res: any) => {
+            queryClient.invalidateQueries({ queryKey: ["document-categories"] });
+            setCategories((prev) => [...prev, res.data]);
+            toast({ title: 'Category created' });
+        }
+    });
+
+    const createManufacturerMutation = useMutation({
+        mutationFn: async (payload: any) => apiService.createManufacturer(payload),
+        onSuccess: (res: any) => {
+            queryClient.invalidateQueries({ queryKey: ["manufacturers"] });
+            setManufacturers((prev) => [...prev, res.data]);
+            toast({ title: 'Manufacturer created' });
         }
     });
 
@@ -111,25 +168,41 @@ export default function MachineDocumentsPage() {
 
     const resetUploadForm = () => {
         setUploadFile(null);
-        setMachineId("");
-        setNotes("");
+        
+        setIsLinkMode(false);
+        setLinkUrl("");
+        setLinkTitle("");
+        setSelectedCategory("");
+        setSelectedManufacturer("");
     };
 
     const handleUpload = (e: React.FormEvent) => {
         e.preventDefault();
+        if (isLinkMode) {
+            if (!linkUrl || !linkTitle) {
+                toast({ title: 'Missing fields', description: 'Please provide a title and a link URL', variant: 'destructive' });
+                return;
+            }
+            const payload: any = {
+                title: linkTitle,
+                linkUrl: linkUrl,
+                categoryId: selectedCategory || undefined,
+                manufacturerId: selectedManufacturer || undefined,
+            };
+            createLinkMutation.mutate(payload);
+            return;
+        }
+
         if (!uploadFile) return;
 
         const formData = new FormData();
         formData.append("file", uploadFile);
-        if (machineId) formData.append("machineId", machineId);
-        if (notes) formData.append("notes", notes);
 
         uploadMutation.mutate(formData);
     };
 
     const filteredDocuments = documents.filter(doc =>
-        doc.fileName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (doc.notes?.toLowerCase() || "").includes(searchQuery.toLowerCase())
+        (String(doc.fileName || doc.title || '').toLowerCase()).includes(searchQuery.toLowerCase())
     );
 
     const formatFileSize = (bytes: number) => {
@@ -151,72 +224,162 @@ export default function MachineDocumentsPage() {
                     <p className="text-gray-500">Manage and access machine manuals and documentation</p>
                 </div>
 
-                <Dialog open={isUploadOpen} onOpenChange={setIsUploadOpen}>
-                    <DialogTrigger asChild>
-                        <Button className="bg-[#0089f4] hover:bg-blue-600 shadow-md">
-                            <Plus className="h-4 w-4 mr-2" />
-                            Upload Document
-                        </Button>
-                    </DialogTrigger>
-                    <DialogContent className="sm:max-w-[425px]">
-                        <form onSubmit={handleUpload}>
-                            <DialogHeader>
-                                <DialogTitle>Upload Machine Document</DialogTitle>
-                                <DialogDescription>
-                                    Upload a manual or documentation file. Supported up to 50MB.
-                                </DialogDescription>
-                            </DialogHeader>
-                            <div className="grid gap-4 py-4">
-                                <div className="grid gap-2">
-                                    <Label htmlFor="file">File</Label>
-                                    <Input
-                                        id="file"
-                                        type="file"
-                                        onChange={(e) => setUploadFile(e.target.files?.[0] || null)}
-                                        required
-                                    />
-                                </div>
-                                <div className="grid gap-2">
-                                    <Label htmlFor="machineId">Machine ID (Optional)</Label>
-                                    <Input
-                                        id="machineId"
-                                        placeholder="Enter machine ID if applicable"
-                                        value={machineId}
-                                        onChange={(e) => setMachineId(e.target.value)}
-                                    />
-                                </div>
-                                <div className="grid gap-2">
-                                    <Label htmlFor="notes">Notes (Optional)</Label>
-                                    <Input
-                                        id="notes"
-                                        placeholder="Add brief notes about this file"
-                                        value={notes}
-                                        onChange={(e) => setNotes(e.target.value)}
-                                    />
-                                </div>
-                            </div>
-                            <DialogFooter>
-                                <Button
-                                    type="submit"
-                                    className="bg-[#0089f4] hover:bg-blue-600 w-full"
-                                    disabled={uploadMutation.isPending || !uploadFile}
-                                >
-                                    {uploadMutation.isPending ? (
+                {isAdmin && (
+                    <Dialog open={isUploadOpen} onOpenChange={setIsUploadOpen}>
+                                <DialogTrigger asChild>
+                                    <span>
+                                        <Button className="bg-[#0089f4] hover:bg-blue-600 shadow-md">
+                                            <Plus className="h-4 w-4 mr-2" />
+                                            Upload Document
+                                        </Button>
+                                    </span>
+                                </DialogTrigger>
+                        <DialogContent className="sm:max-w-[600px]">
+                            <form onSubmit={handleUpload}>
+                                <DialogHeader>
+                                    <DialogTitle>Upload Machine Document</DialogTitle>
+                                    <DialogDescription>
+                                        Upload a manual or create a link-based document. Admins can create categories and manufacturers.
+                                    </DialogDescription>
+                                </DialogHeader>
+                                <div className="grid gap-4 py-4">
+                                    <div className="flex items-center gap-2">
+                                        <Button
+                                            type="button"
+                                            variant={isLinkMode ? 'ghost' : 'default'}
+                                            onClick={() => setIsLinkMode(false)}
+                                        >
+                                            File
+                                        </Button>
+                                        <Button
+                                            type="button"
+                                            variant={isLinkMode ? 'default' : 'ghost'}
+                                            onClick={() => setIsLinkMode(true)}
+                                        >
+                                            Link / URL
+                                        </Button>
+                                    </div>
+
+                                    {isLinkMode ? (
                                         <>
-                                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                                            Uploading...
-                                        </>
+                                            <div className="grid gap-2">
+                                                <Label htmlFor="linkTitle">Title</Label>
+                                                <Input id="linkTitle" placeholder="Document title" value={linkTitle} onChange={(e) => setLinkTitle(e.target.value)} />
+                                            </div>
+                                            <div className="grid gap-2">
+                                                <Label htmlFor="linkUrl">Link URL</Label>
+                                                <Input id="linkUrl" placeholder="https://..." value={linkUrl} onChange={(e) => setLinkUrl(e.target.value)} />
+                                            </div>
+                                            <div className="grid gap-2">
+                                                <Label>Category</Label>
+                                                <div className="flex gap-2">
+                                                    <select className="flex-1" value={selectedCategory} onChange={(e) => setSelectedCategory(e.target.value)}>
+                                                        <option value="">-- Select category --</option>
+                                                        {categories.map((c: any) => (
+                                                            <option key={c._id} value={c._id}>{c.name}</option>
+                                                        ))}
+                                                    </select>
+                                                    <Button type="button" variant="outline" size="sm" onClick={() => setShowCreateCategory((v) => !v)}>
+                                                        <Plus className="h-4 w-4" />
+                                                    </Button>
+                                                </div>
+                                                {showCreateCategory && (
+                                                    <div className="flex gap-2">
+                                                        <Input placeholder="New category name" value={createCategoryName} onChange={(e) => setCreateCategoryName(e.target.value)} />
+                                                        <Button type="button" onClick={() => {
+                                                            if (!createCategoryName) return toast({ title: 'Enter name', variant: 'destructive' });
+                                                            createCategoryMutation.mutate({ name: createCategoryName });
+                                                            setCreateCategoryName('');
+                                                            setShowCreateCategory(false);
+                                                        }}>Create</Button>
+                                                    </div>
+                                                )}
+                                            </div>
+                                            <div className="grid gap-2">
+                                                <Label>Manufacturer</Label>
+                                                <div className="flex gap-2">
+                                                    <select className="flex-1" value={selectedManufacturer} onChange={(e) => setSelectedManufacturer(e.target.value)}>
+                                                        <option value="">-- Select manufacturer --</option>
+                                                        {manufacturers.map((m: any) => (
+                                                            <option key={m._id} value={m._id}>{m.name}</option>
+                                                        ))}
+                                                    </select>
+                                                    <Button type="button" variant="outline" size="sm" onClick={() => setShowCreateManufacturer((v) => !v)}>
+                                                        <Plus className="h-4 w-4" />
+                                                    </Button>
+                                                </div>
+                                                {showCreateManufacturer && (
+                                                    <div className="flex gap-2">
+                                                        <Input placeholder="New manufacturer" value={createManufacturerName} onChange={(e) => setCreateManufacturerName(e.target.value)} />
+                                                        <Button type="button" onClick={() => {
+                                                            if (!createManufacturerName) return toast({ title: 'Enter name', variant: 'destructive' });
+                                                            createManufacturerMutation.mutate({ name: createManufacturerName });
+                                                            setCreateManufacturerName('');
+                                                            setShowCreateManufacturer(false);
+                                                        }}>Create</Button>
+                                                    </div>
+                                                )}
+                                            </div>
+                                                <div className="grid gap-2">
+                                                    {/* machineId and notes removed */}
+                                                </div>
+                                            </>
                                     ) : (
                                         <>
-                                            <Upload className="h-4 w-4 mr-2" />
-                                            Upload to Drive
+                                            <div className="grid gap-2">
+                                                <Label htmlFor="file">File</Label>
+                                                <Input
+                                                    id="file"
+                                                    type="file"
+                                                    onChange={(e) => setUploadFile(e.target.files?.[0] || null)}
+                                                    required={!isLinkMode}
+                                                />
+                                            </div>
+                                            {/* machineId and notes removed */}
                                         </>
                                     )}
-                                </Button>
-                            </DialogFooter>
-                        </form>
-                    </DialogContent>
-                </Dialog>
+                                </div>
+                                <DialogFooter>
+                                    <Button
+                                        type="submit"
+                                        className="bg-[#0089f4] hover:bg-blue-600 w-full"
+                                        disabled={
+                                            (isLinkMode && createLinkMutation.isLoading) ||
+                                            (!isLinkMode && uploadMutation.isPending) ||
+                                            (isLinkMode ? !linkUrl || !linkTitle : !uploadFile)
+                                        }
+                                    >
+                                        {isLinkMode ? (
+                                            createLinkMutation.isLoading ? (
+                                                <>
+                                                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                                    Creating...
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <ExternalLink className="h-4 w-4 mr-2" />
+                                                    Create Link
+                                                </>
+                                            )
+                                        ) : (
+                                            uploadMutation.isPending ? (
+                                                <>
+                                                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                                    Uploading...
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <Upload className="h-4 w-4 mr-2" />
+                                                    Upload to Drive
+                                                </>
+                                            )
+                                        )}
+                                    </Button>
+                                </DialogFooter>
+                            </form>
+                        </DialogContent>
+                    </Dialog>
+                )}
             </div>
 
             <Card className="border-none shadow-sm bg-white/50 backdrop-blur-sm">
@@ -279,18 +442,30 @@ export default function MachineDocumentsPage() {
                                             <div className="bg-blue-50 p-2.5 rounded-xl group-hover:bg-blue-100 transition-colors">
                                                 <File className="h-5 w-5 text-[#0089f4]" />
                                             </div>
-                                            <div className="flex items-center gap-1">
-                                                <Button
-                                                    variant="ghost"
-                                                    size="icon"
-                                                    className="h-8 w-8 text-gray-400 hover:text-[#0089f4] hover:bg-blue-50"
-                                                    title="View on Google Drive"
-                                                    asChild
-                                                >
-                                                    <a href={doc.webViewLink} target="_blank" rel="noopener noreferrer">
-                                                        <ExternalLink className="h-4 w-4" />
-                                                    </a>
-                                                </Button>
+                                                            <div className="flex items-center gap-1">
+                                                                {(doc.webViewLink || doc.linkUrl) ? (
+                                                                    <Button
+                                                                        variant="ghost"
+                                                                        size="icon"
+                                                                        className="h-8 w-8 text-gray-400 hover:text-[#0089f4] hover:bg-blue-50"
+                                                                        title="Open document"
+                                                                        asChild
+                                                                    >
+                                                                        <a href={doc.webViewLink || doc.linkUrl} target="_blank" rel="noopener noreferrer">
+                                                                            <ExternalLink className="h-4 w-4" />
+                                                                        </a>
+                                                                    </Button>
+                                                                ) : (
+                                                                    <Button
+                                                                        variant="ghost"
+                                                                        size="icon"
+                                                                        className="h-8 w-8 text-gray-300"
+                                                                        title="No preview available"
+                                                                        disabled
+                                                                    >
+                                                                        <ExternalLink className="h-4 w-4" />
+                                                                    </Button>
+                                                                )}
                                                 <Button
                                                     variant="ghost"
                                                     size="icon"
@@ -309,30 +484,28 @@ export default function MachineDocumentsPage() {
                                         </div>
 
                                         <div>
-                                            <h3 className="font-bold text-gray-900 truncate" title={doc.fileName}>
-                                                {doc.fileName}
+                                            <h3 className="font-bold text-gray-900 truncate" title={doc.title || doc.fileName || 'Document'}>
+                                                {doc.title || doc.fileName || 'Untitled Document'}
                                             </h3>
                                             <div className="flex items-center gap-2 mt-1">
                                                 <Badge variant="secondary" className="bg-gray-100 text-gray-600 text-[10px] font-medium font-mono uppercase">
-                                                    {doc.mimeType.split('/').pop()}
+                                                    {doc.mimeType ? String(doc.mimeType).split('/').pop() : (doc.type === 'link' ? 'link' : 'n/a')}
                                                 </Badge>
-                                                <span className="text-[11px] text-gray-400">{formatFileSize(doc.fileSize)}</span>
+                                                {doc.fileSize != null && (
+                                                    <span className="text-[11px] text-gray-400">{formatFileSize(doc.fileSize)}</span>
+                                                )}
                                             </div>
                                         </div>
 
-                                        {doc.notes && (
-                                            <p className="text-sm text-gray-600 line-clamp-2 bg-gray-50/50 p-2 rounded-lg italic">
-                                                "{doc.notes}"
-                                            </p>
-                                        )}
+                                        {/* notes removed per UI change */}
 
                                         <div className="pt-4 border-t border-gray-50 flex items-center justify-between">
                                             <div className="flex items-center gap-2">
                                                 <div className="w-6 h-6 rounded-full bg-gradient-to-br from-[#008cf7] to-[#006bb8] flex items-center justify-center text-white text-[10px] font-bold">
-                                                    {doc.uploadedBy.firstName?.[0]}{doc.uploadedBy.lastName?.[0]}
+                                                    {doc.uploadedBy?.firstName?.[0] || '?'}{doc.uploadedBy?.lastName?.[0] || ''}
                                                 </div>
                                                 <span className="text-xs text-gray-500 font-medium">
-                                                    {doc.uploadedBy.firstName}
+                                                    {doc.uploadedBy?.firstName || 'System'}
                                                 </span>
                                             </div>
                                             <span className="text-[10px] text-gray-400 flex items-center gap-1">

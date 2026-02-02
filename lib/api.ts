@@ -12,6 +12,12 @@ const API_BASE_URL: string = (process.env.NEXT_PUBLIC_API_BASE_URL as string) ||
     : DEFAULT_PROD_API
 )
 
+// Debug: expose the resolved API base so you can confirm which backend the client will call
+try {
+  // eslint-disable-next-line no-console
+  console.info("apiService: resolved API_BASE_URL =>", API_BASE_URL)
+} catch (e) {}
+
 export interface DashboardOverview {
   totalVisits: number
   totalTrails: number
@@ -820,6 +826,129 @@ class ApiService {
     return this.makeRequest(`/machine-documents/${encodeURIComponent(id)}`, {
       method: "DELETE",
     });
+  }
+
+  // Documents: categories & manufacturers
+  async getDocumentCategories(): Promise<any> {
+    // Try internal Next.js app route first (relative path) to support the file-backed handlers in this repo.
+    try {
+      if (typeof window !== 'undefined') {
+        const resp = await fetch('/api/document-categories');
+        if (resp.ok) {
+          const d = await resp.json().catch(() => null)
+          if (d) {
+            if (Array.isArray(d)) return { success: true, data: d }
+            if (d.data) return d
+          }
+        }
+      }
+    } catch (e) {
+      // fallthrough to external API
+    }
+    const r = await this.makeRequest(`/document-categories`);
+    if (Array.isArray(r)) return { success: true, data: r }
+    return r
+  }
+
+  async createDocumentCategory(payload: { name: string; description?: string }): Promise<any> {
+    // Prefer internal Next.js app route when running in the browser
+    try {
+      if (typeof window !== 'undefined') {
+        const resp = await fetch('/api/document-categories', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', ...(authService.getAccessToken() ? { Authorization: `Bearer ${authService.getAccessToken()}` } : {}) },
+          body: JSON.stringify(payload),
+        });
+        if (resp.ok) return resp.json();
+        const err = await resp.json().catch(() => null);
+        throw new Error(err?.error || resp.statusText || 'Failed to create category');
+      }
+    } catch (e) {
+      // fall through to external API
+    }
+    return this.makeRequest(`/document-categories`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  }
+
+  async getManufacturers(): Promise<any> {
+    try {
+      if (typeof window !== 'undefined') {
+        const resp = await fetch('/api/manufacturers');
+        if (resp.ok) {
+          const d = await resp.json().catch(() => null)
+          if (d) {
+            if (Array.isArray(d)) return { success: true, data: d }
+            if (d.data) return d
+          }
+        }
+      }
+    } catch (e) {}
+    const r = await this.makeRequest(`/manufacturers`);
+    if (Array.isArray(r)) return { success: true, data: r }
+    return r
+  }
+
+  async createManufacturer(payload: { name: string; country?: string; notes?: string }): Promise<any> {
+    try {
+      if (typeof window !== 'undefined') {
+        const resp = await fetch('/api/manufacturers', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', ...(authService.getAccessToken() ? { Authorization: `Bearer ${authService.getAccessToken()}` } : {}) },
+          body: JSON.stringify(payload),
+        });
+        if (resp.ok) return resp.json();
+        const err = await resp.json().catch(() => null);
+        throw new Error(err?.error || resp.statusText || 'Failed to create manufacturer');
+      }
+    } catch (e) {}
+    return this.makeRequest(`/manufacturers`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  }
+
+  // Create a document record that is a link (no file upload)
+  // NOTE: send to a dedicated endpoint to avoid server-side upload handler expecting multipart/form-data
+  async createMachineDocumentLink(payload: {
+    title: string;
+    linkUrl: string;
+    categoryId?: string;
+    manufacturerId?: string;
+  }): Promise<any> {
+    // Use fetch directly to ensure we send a clean JSON POST and a distinguishing header
+    const token = authService.getAccessToken();
+    const fullUrl = `${API_BASE_URL}/machine-documents/link`;
+    const resp = await fetch(fullUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Document-Type': 'link',
+        ...(token && { Authorization: `Bearer ${token}` }),
+      },
+      body: JSON.stringify(payload),
+    });
+    if (!resp.ok) {
+      let errMsg = resp.statusText;
+      try { const d = await resp.json(); if (d && d.message) errMsg = d.message; } catch {}
+      throw new Error(errMsg || 'Failed to create document link');
+    }
+    return resp.json();
+  }
+
+  // Public sales API: fetch active document links for sales usage
+  async getSalesDocuments(filters: Record<string, any> = {}): Promise<any> {
+    const params = new URLSearchParams();
+    Object.entries(filters).forEach(([k, v]) => {
+      if (v !== undefined && v !== null && v !== "") params.set(k, String(v));
+    });
+    const q = params.toString();
+    // Public endpoint; do not attach token
+    const fullUrl = `${API_BASE_URL}/sales/documents${q ? `?${q}` : ''}`;
+    const resp = await fetch(fullUrl, { headers: { 'Content-Type': 'application/json' } });
+    if (!resp.ok) throw new Error('Failed to fetch sales documents');
+    return resp.json();
   }
 
   // Engineering Requests API

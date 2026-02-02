@@ -120,6 +120,22 @@ export default function DailyReports() {
   const [exportEndDate, setExportEndDate] = useState<string>("");
   const [isExporting, setIsExporting] = useState<boolean>(false);
 
+  // Helper to format product names consistently across exports and displays
+  function formatProductName(name?: string) {
+    if (!name) return "";
+    let s = String(name).trim();
+    // normalize L suffix to "ltr"
+    s = s.replace(/(\d+)\s*[lL]\b/g, "$1 ltr");
+    s = s.replace(/\s+/g, " ").trim();
+    s = s.toLowerCase();
+    // move size before noun for patterns like "autoclave 18 ltr" -> "18 ltr autoclave"
+    const m = s.match(/^(autoclave)\s+(\d+\s*ltr)$/);
+    if (m) {
+      s = `${m[2]} ${m[1]}`;
+    }
+    return s;
+  }
+
   // user summary states
   const [showUserSummary, setShowUserSummary] = useState(false);
   const [selectedUserId, setSelectedUserId] = useState<string>("");
@@ -322,7 +338,13 @@ export default function DailyReports() {
         escape((v.contacts || []).map(c => c.name || '').join('; ')),
         escape((v.contacts || []).map(c => c.phone || '').join('; ')),
         escape((v.contacts || []).map(c => c.role || '').join('; ')),
-        escape(JSON.stringify(v.productsOfInterest || [])),
+        // write only product names (formatted) instead of raw JSON
+        escape(
+          (v.productsOfInterest || [])
+            .map((p: any) => formatProductName(p?.name))
+            .filter(Boolean)
+            .join("; ")
+        ),
 
         escape(v.visitPurpose || ''),
         escape(v.visitOutcome || ''),

@@ -19,9 +19,9 @@ export async function GET(request: Request, { params }: { params: { id: string }
       return osm === id || f._id === id
     })
 
-    if (!found) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+    if (!found) return NextResponse.json({ success: false, message: 'Not found' }, { status: 404 })
     return NextResponse.json(found)
   } catch (err) {
-    return NextResponse.json({ error: 'Failed to read facility' }, { status: 500 })
+    return NextResponse.json({ success: false, message: 'Failed to read facility' }, { status: 500 })
   }
 }

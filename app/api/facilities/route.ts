@@ -46,7 +46,7 @@ export async function GET(request: Request) {
 
     return NextResponse.json({ docs, totalDocs, limit, page, totalPages })
   } catch (err) {
-    return NextResponse.json({ error: 'Failed to read facilities' }, { status: 500 })
+    return NextResponse.json({ success: false, message: 'Failed to read facilities' }, { status: 500 })
   }
 }
 
@@ -54,20 +54,20 @@ export async function POST(request: Request) {
   // Very small admin guard - expects header Authorization: Bearer <token>
   const auth = request.headers.get('authorization') || ''
   if (!auth.startsWith('Bearer ')) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    return NextResponse.json({ success: false, message: 'Unauthorized' }, { status: 401 })
   }
   const token = auth.replace('Bearer ', '').trim()
   // For local/dev: accept token 'admin' or any non-empty string when NEXT_PUBLIC_DEV_ALLOW_CREATE=1
   const allowDev = process.env.NEXT_PUBLIC_DEV_ALLOW_CREATE === '1'
   if (token !== 'admin' && !allowDev) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    return NextResponse.json({ success: false, message: 'Forbidden' }, { status: 403 })
   }
 
   try {
     const body = await request.json()
     // Expect a GeoJSON Feature
     if (!body || body.type !== 'Feature' || !body.geometry) {
-      return NextResponse.json({ error: 'Invalid feature body' }, { status: 400 })
+      return NextResponse.json({ success: false, message: 'Invalid feature body' }, { status: 400 })
     }
 
     const data = await readData()
@@ -84,6 +84,6 @@ export async function POST(request: Request) {
 
     return NextResponse.json(body, { status: 201 })
   } catch (err) {
-    return NextResponse.json({ error: 'Failed to create facility' }, { status: 500 })
+    return NextResponse.json({ success: false, message: 'Failed to create facility' }, { status: 500 })
   }
 }
