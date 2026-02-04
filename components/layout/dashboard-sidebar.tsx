@@ -26,7 +26,8 @@ import {
   CalendarCheck,
   Package,
   Phone,
-  ClipboardList
+  ClipboardList,
+  Database
 } from "lucide-react";
 
 interface DashboardSidebarProps {
@@ -171,6 +172,13 @@ export function DashboardSidebar({ currentPage = "dashboard", onPageChange }: Da
       path: "/dashboard/planners",
       color: "text-gray-900",
       bgColor: "bg-gray-100"
+    },
+    {
+      icon: Database,
+      label: "Data Store",
+      path: "/dashboard/data-store",
+      color: "text-[#008cf7]",
+      bgColor: "bg-blue-50"
     },
   ];
 

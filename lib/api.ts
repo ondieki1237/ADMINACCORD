@@ -987,6 +987,94 @@ class ApiService {
       method: "DELETE",
     });
   }
+
+  // Quotations endpoints
+  async getQuotations(page = 1, limit = 20, filters: Record<string, any> = {}): Promise<any> {
+    const params = new URLSearchParams({
+      page: String(page),
+      limit: String(limit),
+      _t: String(Date.now())
+    });
+    Object.entries(filters).forEach(([k, v]) => {
+      if (v !== undefined && v !== null && v !== "") params.set(k, String(v));
+    });
+    return this.makeRequest(`/quotations?${params.toString()}`);
+  }
+
+  async getQuotationById(quotationId: string): Promise<any> {
+    return this.makeRequest(`/quotations/${encodeURIComponent(quotationId)}`);
+  }
+
+  async updateQuotation(quotationId: string, payload: Record<string, any>): Promise<any> {
+    return this.makeRequest(`/quotations/${encodeURIComponent(quotationId)}`, {
+      method: "PUT",
+      body: JSON.stringify(payload),
+    });
+  }
+
+  async deleteQuotation(quotationId: string): Promise<any> {
+    return this.makeRequest(`/quotations/${encodeURIComponent(quotationId)}`, {
+      method: "DELETE",
+    });
+  }
+
+  // Data Store Export API (for bulk data export)
+  async getDataStoreExport(params: {
+    dataTypes: string[];
+    dateRange?: { startDate?: string; endDate?: string };
+    employees?: string[] | "all";
+    regions?: string[] | "all";
+    columns?: Record<string, string[]>;
+    sorting?: { field: string; order: "asc" | "desc" };
+  }): Promise<any> {
+    return this.makeRequest(`/admin/data-store/export`, {
+      method: "POST",
+      body: JSON.stringify(params),
+    });
+  }
+
+  async getDataStoreStatistics(params: {
+    startDate?: string;
+    endDate?: string;
+    employees?: string;
+    regions?: string;
+  } = {}): Promise<any> {
+    const queryParams = new URLSearchParams();
+    Object.entries(params).forEach(([k, v]) => {
+      if (v) queryParams.set(k, String(v));
+    });
+    return this.makeRequest(`/admin/data-store/statistics?${queryParams.toString()}`);
+  }
+
+  // Export Templates
+  async getExportTemplates(): Promise<any> {
+    return this.makeRequest(`/admin/data-store/templates`);
+  }
+
+  async createExportTemplate(template: {
+    name: string;
+    description?: string;
+    config: Record<string, any>;
+    isShared?: boolean;
+  }): Promise<any> {
+    return this.makeRequest(`/admin/data-store/templates`, {
+      method: "POST",
+      body: JSON.stringify(template),
+    });
+  }
+
+  async updateExportTemplate(templateId: string, template: Record<string, any>): Promise<any> {
+    return this.makeRequest(`/admin/data-store/templates/${encodeURIComponent(templateId)}`, {
+      method: "PUT",
+      body: JSON.stringify(template),
+    });
+  }
+
+  async deleteExportTemplate(templateId: string): Promise<any> {
+    return this.makeRequest(`/admin/data-store/templates/${encodeURIComponent(templateId)}`, {
+      method: "DELETE",
+    });
+  }
 }
 
 export const apiService = new ApiService()

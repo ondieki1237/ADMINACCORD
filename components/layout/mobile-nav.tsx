@@ -16,7 +16,8 @@ import {
   Calendar,
   Menu,
   LogOut,
-  ClipboardList
+  ClipboardList,
+  Database
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
@@ -50,6 +51,7 @@ export function MobileNav({ currentPage, onPageChange }: MobileNavProps) {
     { id: "telesales", label: "Telesales", icon: Phone, path: "/dashboard/telesales" },
     { id: "user-manager", label: "Users", icon: Users, path: "/dashboard/user-manager" },
     { id: "planners", label: "Planners", icon: Calendar, path: "/dashboard/planners" },
+    { id: "data-store", label: "Data Store", icon: Database, path: "/dashboard/data-store" },
   ]
 
   const handleLogout = async () => {

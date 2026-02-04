@@ -31,6 +31,7 @@ const PerformanceAnalytics = dynamic(() => import("@/components/dashboard/perfor
 const EngineerReports = dynamic(() => import("@/components/dashboard/engineer-reports"), { ssr: false })
 const EngineerFinance = dynamic(() => import("@/components/dashboard/engineer-finance"), { ssr: false })
 const DailyReports = dynamic(() => import("@/components/dashboard/daily-reports"), { ssr: false })
+const DataStore = dynamic(() => import("@/components/dashboard/data-store"), { ssr: false })
 
 export default function HomePage() {
   const [isAuthenticated, setIsAuthenticated] = useState(false)
@@ -49,7 +50,7 @@ export default function HomePage() {
   }
 
   const handleSwipeLeft = () => {
-    const pages = ["dashboard", "visits", "trails", "follow-ups", "profile", "reports", "advanced-analytics", "leads", "machines", "consumables", "user-manager", "planners", "sales-heatmap", "daily-reports", "performance-analytics", "engineer-reports", "engineer-finance"]
+    const pages = ["dashboard", "visits", "trails", "follow-ups", "profile", "reports", "advanced-analytics", "leads", "machines", "consumables", "user-manager", "planners", "sales-heatmap", "daily-reports", "performance-analytics", "engineer-reports", "engineer-finance", "data-store"]
     const currentIndex = pages.indexOf(currentPage)
     if (currentIndex < pages.length - 1) {
       setCurrentPage(pages[currentIndex + 1])
@@ -57,7 +58,7 @@ export default function HomePage() {
   }
 
   const handleSwipeRight = () => {
-    const pages = ["dashboard", "visits", "trails", "follow-ups", "profile", "reports", "advanced-analytics", "leads", "machines", "consumables", "user-manager", "planners", "sales-heatmap", "daily-reports", "performance-analytics", "engineer-reports", "engineer-finance"]
+    const pages = ["dashboard", "visits", "trails", "follow-ups", "profile", "reports", "advanced-analytics", "leads", "machines", "consumables", "user-manager", "planners", "sales-heatmap", "daily-reports", "performance-analytics", "engineer-reports", "engineer-finance", "data-store"]
     const currentIndex = pages.indexOf(currentPage)
     if (currentIndex > 0) {
       setCurrentPage(pages[currentIndex - 1])
@@ -126,6 +127,8 @@ export default function HomePage() {
         return <EngineerFinance onPageChange={setCurrentPage} />
       case "daily-reports":
         return <DailyReports />
+      case "data-store":
+        return <DataStore />
       default:
         return <DashboardOverview />
     }
