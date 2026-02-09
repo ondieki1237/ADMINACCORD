@@ -211,7 +211,7 @@ export function getUniquePlannerUsers(planners: Planner[]) {
   const usersMap = new Map();
   
   planners.forEach(planner => {
-    if (!usersMap.has(planner.userId._id)) {
+    if (planner.userId && planner.userId._id && !usersMap.has(planner.userId._id)) {
       usersMap.set(planner.userId._id, planner.userId);
     }
   });

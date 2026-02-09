@@ -42,9 +42,25 @@ export default function PlannersComponent() {
   
   const weekRange = getWeekRange(currentWeekStart);
   const uniqueUsers = getUniquePlannerUsers(planners);
+  
+  // Filter planners by the actual planned week dates (not createdAt)
+  const plannersForSelectedWeek = planners.filter(planner => {
+    if (!planner.days || planner.days.length === 0) return false;
+    
+    // Check if any of the planner's days fall within the selected week
+    const weekStart = new Date(weekRange.from);
+    const weekEnd = new Date(weekRange.to);
+    
+    return planner.days.some(day => {
+      if (!day.date) return false;
+      const dayDate = new Date(day.date);
+      return dayDate >= weekStart && dayDate <= weekEnd;
+    });
+  });
+  
   const filteredPlanners = selectedUserId 
-    ? planners.filter(p => p.userId._id === selectedUserId)
-    : planners;
+    ? plannersForSelectedWeek.filter(p => p.userId?._id === selectedUserId)
+    : plannersForSelectedWeek;
   const totalAllowance = calculateTotalAllowance(filteredPlanners);
 
   const fetchPlanners = async () => {
@@ -58,15 +74,21 @@ export default function PlannersComponent() {
         return;
       }
 
-      const range = getWeekRange(currentWeekStart);
+      // Fetch a broader range to allow client-side filtering by planned dates
+      // Get 4 weeks before and 4 weeks after to cover planners created early
+      const fourWeeksAgo = new Date(currentWeekStart);
+      fourWeeksAgo.setDate(fourWeeksAgo.getDate() - 28);
+      const fourWeeksAhead = new Date(currentWeekStart);
+      fourWeeksAhead.setDate(fourWeeksAhead.getDate() + 28);
+      
       const response = await fetchAdminPlanners({
         token,
-        from: range.from,
-        to: range.to,
+        from: fourWeeksAgo.toISOString(),
+        to: fourWeeksAhead.toISOString(),
         userId: selectedUserId || undefined,
         sortBy,
         order: sortOrder,
-        limit: 100
+        limit: 500
       });
 
       if (response.success) {
@@ -306,6 +328,9 @@ export default function PlannersComponent() {
           {filteredPlanners.map((planner) => {
             const weeklyAllowance = calculateWeeklyAllowance(planner);
             
+            // Skip planners with null userId
+            if (!planner.userId) return null;
+            
             return (
               <div key={planner._id} className="bg-white rounded-xl shadow-lg border-2 border-gray-100 overflow-hidden">
                 {/* Planner Header */}
@@ -313,10 +338,10 @@ export default function PlannersComponent() {
                   <div className="flex items-start justify-between">
                     <div>
                       <h3 className="text-xl font-bold text-gray-900">
-                        {planner.userId.firstName} {planner.userId.lastName}
+                        {planner.userId?.firstName || 'Unknown'} {planner.userId?.lastName || 'User'}
                       </h3>
                       <p className="text-sm text-gray-600 mt-1">
-                        {planner.userId.employeeId} • {planner.userId.email}
+                        {planner.userId?.employeeId || 'N/A'} • {planner.userId?.email || 'N/A'}
                       </p>
                     </div>
                     <div className="text-right flex items-start space-x-3">

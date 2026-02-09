@@ -2,7 +2,7 @@
 
 import React, { useState, useMemo, useCallback } from "react"
 import { useQuery } from "@tanstack/react-query"
-import { format, startOfDay, endOfDay, startOfWeek, endOfWeek, startOfMonth, endOfMonth, startOfQuarter, endOfQuarter, startOfYear, endOfYear, subDays, getWeek, getYear } from "date-fns"
+import { format, startOfDay, endOfDay, startOfWeek, endOfWeek, startOfMonth, endOfMonth, startOfQuarter, endOfQuarter, startOfYear, endOfYear, subDays, differenceInDays } from "date-fns"
 import * as XLSX from "xlsx"
 import { apiService } from "@/lib/api"
 import { authService } from "@/lib/auth"
@@ -528,45 +528,68 @@ export default function DataStore() {
     setPreviewData(preview)
   }
 
-  // Helper: Build rows for a dataset
+  // Helper: Build rows for a dataset with dynamic week grouping
   const buildDataRows = (
     data: any[],
     columns: string[],
     dtConfig: typeof DATA_TYPES[0],
-    groupByWeek: boolean = false
+    groupByWeek: boolean = false,
+    rangeStartDate?: Date | null
   ): any[][] => {
     const rows: any[][] = []
 
-    if (groupByWeek && data.length > 0) {
-      // Group data by week
-      const weekGroups: Record<string, any[]> = {}
+    if (groupByWeek && data.length > 0 && rangeStartDate) {
+      // Group data by dynamic weeks (Week 1, Week 2, etc.) based on range start date
+      const weekGroups: Record<number, { label: string; startDate: string; endDate: string; data: any[] }> = {}
       
       data.forEach((item: any) => {
         const dateField = item.visitDate || item.createdAt || item.date
         if (dateField) {
           const itemDate = new Date(dateField)
-          const weekNum = getWeek(itemDate)
-          const year = getYear(itemDate)
-          const weekKey = `Week ${weekNum} (${year})`
-          if (!weekGroups[weekKey]) weekGroups[weekKey] = []
-          weekGroups[weekKey].push(item)
+          // Calculate which week number this falls into (1-based)
+          const daysDiff = differenceInDays(startOfDay(itemDate), startOfDay(rangeStartDate))
+          const weekNum = Math.floor(daysDiff / 7) + 1
+          
+          if (!weekGroups[weekNum]) {
+            // Calculate week start and end dates
+            const weekStart = new Date(rangeStartDate)
+            weekStart.setDate(weekStart.getDate() + (weekNum - 1) * 7)
+            const weekEnd = new Date(weekStart)
+            weekEnd.setDate(weekEnd.getDate() + 6)
+            
+            weekGroups[weekNum] = {
+              label: `Week ${weekNum}`,
+              startDate: format(weekStart, "MMM d"),
+              endDate: format(weekEnd, "MMM d, yyyy"),
+              data: []
+            }
+          }
+          weekGroups[weekNum].data.push(item)
         } else {
-          if (!weekGroups["No Date"]) weekGroups["No Date"] = []
-          weekGroups["No Date"].push(item)
+          // Items without dates go to week 0
+          if (!weekGroups[0]) {
+            weekGroups[0] = { label: "No Date", startDate: "", endDate: "", data: [] }
+          }
+          weekGroups[0].data.push(item)
         }
       })
 
-      // Sort weeks
-      const sortedWeeks = Object.keys(weekGroups).sort((a, b) => {
-        if (a === "No Date") return 1
-        if (b === "No Date") return -1
-        return a.localeCompare(b)
+      // Sort weeks by number
+      const sortedWeekNums = Object.keys(weekGroups).map(Number).sort((a, b) => {
+        if (a === 0) return 1 // "No Date" goes last
+        if (b === 0) return -1
+        return a - b
       })
 
-      sortedWeeks.forEach((weekKey, idx) => {
-        // Add week header
+      sortedWeekNums.forEach((weekNum, idx) => {
+        const week = weekGroups[weekNum]
+        
+        // Add week header with date range
         if (idx > 0) rows.push([]) // Empty row between weeks
-        rows.push([`📅 ${weekKey}`])
+        const weekHeader = week.startDate 
+          ? `📅 ${week.label} (${week.startDate} - ${week.endDate})`
+          : `📅 ${week.label}`
+        rows.push([weekHeader])
         rows.push([]) // Empty row after week header
 
         // Add column headers
@@ -579,7 +602,7 @@ export default function DataStore() {
         }
 
         // Add data rows for this week
-        weekGroups[weekKey].forEach((item: any) => {
+        week.data.forEach((item: any) => {
           const row = columns.map(colKey => {
             const colDef = dtConfig.columns.find(c => c.key === colKey)
             const value = getNestedValue(item, colKey)
@@ -589,7 +612,7 @@ export default function DataStore() {
         })
 
         // Add week subtotal
-        rows.push([`Subtotal: ${weekGroups[weekKey].length} records`])
+        rows.push([`Subtotal: ${week.data.length} records`])
       })
     } else {
       // Regular rows without week grouping
@@ -697,8 +720,8 @@ export default function DataStore() {
       const workbook = XLSX.utils.book_new()
       let totalRecords = 0
 
-      // Check if we should group by week (monthly-related presets)
-      const isMonthlyReport = ["thisMonth", "lastMonth"].includes(datePreset)
+      // Group by week when any date range is selected (not just today/yesterday/all)
+      const shouldGroupByWeek = !!(dateRange.start && dateRange.end && !["today", "yesterday"].includes(datePreset))
 
       for (const dataType of selectedDataTypes) {
         const dtConfig = DATA_TYPES.find(dt => dt.id === dataType)
@@ -716,7 +739,11 @@ export default function DataStore() {
         }
 
         // When employees are selected, create separate sheets per employee
+        console.log("Selected employees:", selectedEmployees)
+        console.log("Number of selected employees:", selectedEmployees.length)
+        
         if (selectedEmployees.length >= 1) {
+          console.log("ENTERING per-employee sheet creation...")
           const startDate = dateRange.start ? format(dateRange.start, "yyyy-MM-dd") : undefined
           const endDate = dateRange.end ? format(dateRange.end, "yyyy-MM-dd") : undefined
 
@@ -732,12 +759,11 @@ export default function DataStore() {
             try {
               switch (dataType) {
                 case "visits":
-                  result = await apiService.getAdminVisits({
+                  // Use the dedicated user-specific endpoint
+                  result = await apiService.getAdminVisitsByUser(empId, {
                     startDate,
                     endDate,
                     limit: 10000,
-                    userId: empId,
-                    ...(selectedRegion !== "all" && { region: selectedRegion }),
                   })
                   break
                 case "leads":
@@ -763,6 +789,8 @@ export default function DataStore() {
 
               const docs = result?.data?.docs || result?.docs || result?.data || result || []
               employeeData = Array.isArray(docs) ? docs : []
+              
+              console.log(`Fetched ${employeeData.length} ${dataType} records for ${empName} (${empId})`)
             } catch (error) {
               console.error(`Error fetching ${dataType} for ${empName}:`, error)
               continue
@@ -770,11 +798,11 @@ export default function DataStore() {
 
             // Skip if no data for this employee
             if (employeeData.length === 0) {
-              console.log(`No data for employee: ${empName}`)
+              console.log(`No data for employee: ${empName} (${empId})`)
               continue
             }
 
-            const rows = buildDataRows(employeeData, columns, dtConfig, isMonthlyReport)
+            const rows = buildDataRows(employeeData, columns, dtConfig, shouldGroupByWeek, dateRange.start)
             totalRecords += employeeData.length
 
             // Add summary if enabled
@@ -800,12 +828,13 @@ export default function DataStore() {
               finalSheetName = `${cleanName.substring(0, 28)}_${counter++}`
             }
             
+            console.log(`Creating sheet: ${finalSheetName} with ${employeeData.length} records`)
             XLSX.utils.book_append_sheet(workbook, worksheet, finalSheetName)
           }
         } else {
           // No employee filter - single sheet per data type
           const singleData = await fetchDataForType(dataType)
-          const rows = buildDataRows(singleData, columns, dtConfig, isMonthlyReport)
+          const rows = buildDataRows(singleData, columns, dtConfig, shouldGroupByWeek, dateRange.start)
           totalRecords += singleData.length
 
           // Add summary if enabled
