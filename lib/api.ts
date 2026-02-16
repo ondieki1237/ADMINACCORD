@@ -797,34 +797,43 @@ class ApiService {
   }
 
   // Machine Documents endpoints
-  async getMachineDocuments(machineId?: string): Promise<any> {
-    const params = machineId ? `?machineId=${encodeURIComponent(machineId)}` : "";
-    return this.makeRequest(`/machine-documents${params}`);
+  async getMachineDocuments(params: { type?: 'file' | 'link'; all?: boolean; machineId?: string } = {}) {
+    const query = new URLSearchParams();
+    if (params.type) query.set('type', params.type);
+    if (params.all) query.set('all', 'true');
+    if (params.machineId) query.set('machineId', params.machineId);
+    return this.makeRequest(`/machine-documents?${query.toString()}`);
   }
 
-  async uploadMachineDocument(formData: FormData): Promise<any> {
-    let token = authService.getAccessToken();
-    const fullUrl = `${API_BASE_URL}/machine-documents`;
+  async getMachineDocumentById(id: string) {
+    return this.makeRequest(`/machine-documents/${encodeURIComponent(id)}`);
+  }
 
-    const response = await fetch(fullUrl, {
-      method: "POST",
-      headers: {
-        ...(token && { Authorization: `Bearer ${token}` }),
-        // Note: Do not set Content-Type for FormData, the browser will set it with the correct boundary
-      },
+  async uploadMachineDocumentFile(formData: FormData) {
+    return this.makeRequest('/machine-documents', {
+      method: 'POST',
       body: formData,
+      headers: {}, // Let browser set Content-Type
     });
-
-    if (!response.ok) {
-      throw new Error("Upload failed");
-    }
-
-    return response.json();
   }
 
-  async deleteMachineDocument(id: string): Promise<any> {
+  async createMachineDocumentLink(payload: {
+    type: 'link';
+    title: string;
+    linkUrl: string;
+    categoryId?: string;
+    manufacturerId?: string;
+  }) {
+    return this.makeRequest('/machine-documents/link', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
+
+  async deleteMachineDocument(id: string) {
     return this.makeRequest(`/machine-documents/${encodeURIComponent(id)}`, {
-      method: "DELETE",
+      method: 'DELETE',
     });
   }
 

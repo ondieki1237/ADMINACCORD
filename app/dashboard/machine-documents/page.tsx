@@ -80,18 +80,12 @@ export default function MachineDocumentsPage() {
         }
     });
 
-    // fetch categories & manufacturers for selection
-    const { data: catResp } = useQuery({
-        queryKey: ["document-categories"],
-        queryFn: async () => (await apiService.getDocumentCategories()).data || [],
-        onSuccess: (d: any) => setCategories(d || []),
-    });
-
-    const { data: manResp } = useQuery({
-        queryKey: ["manufacturers"],
-        queryFn: async () => (await apiService.getManufacturers()).data || [],
-        onSuccess: (d: any) => setManufacturers(d || []),
-    });
+    // fetch categories & manufacturers for selection (always from backend API base URL)
+    useEffect(() => {
+        const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:4500/api';
+        fetch(`${API_BASE}/document-categories`).then(res => res.json()).then(json => setCategories(json.data || []));
+        fetch(`${API_BASE}/manufacturers`).then(res => res.json()).then(json => setManufacturers(json.data || []));
+    }, []);
 
     const uploadMutation = useMutation({
         mutationFn: async (formData: FormData) => {
