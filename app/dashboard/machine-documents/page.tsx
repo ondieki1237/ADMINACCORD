@@ -60,6 +60,13 @@ export default function MachineDocumentsPage() {
     const [isLinkMode, setIsLinkMode] = useState(false);
     const [linkUrl, setLinkUrl] = useState("");
     const [linkTitle, setLinkTitle] = useState("");
+    // Edit modal state
+    const [isEditOpen, setIsEditOpen] = useState(false);
+    const [editDoc, setEditDoc] = useState<any | null>(null);
+    const [editLinkUrl, setEditLinkUrl] = useState("");
+    const [editLinkTitle, setEditLinkTitle] = useState("");
+    const [editSelectedCategory, setEditSelectedCategory] = useState("");
+    const [editSelectedManufacturer, setEditSelectedManufacturer] = useState("");
     
     const [categories, setCategories] = useState<any[]>([]);
     const [manufacturers, setManufacturers] = useState<any[]>([]);
@@ -162,12 +169,64 @@ export default function MachineDocumentsPage() {
 
     const resetUploadForm = () => {
         setUploadFile(null);
-        
         setIsLinkMode(false);
         setLinkUrl("");
         setLinkTitle("");
         setSelectedCategory("");
         setSelectedManufacturer("");
+    };
+
+    const resetEditForm = () => {
+        setEditDoc(null);
+        setEditLinkUrl("");
+        setEditLinkTitle("");
+        setEditSelectedCategory("");
+        setEditSelectedManufacturer("");
+    };
+    // Update mutation for editing machine document (link type only for now)
+    const updateLinkMutation = useMutation({
+        mutationFn: async ({ id, payload }: { id: string; payload: any }) => {
+            // Only support updating link documents for now
+            return apiService.makeRequest(`/machine-documents/${id}`, {
+                method: "PUT",
+                body: JSON.stringify(payload),
+                headers: { "Content-Type": "application/json" },
+            });
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ["machine-documents"] });
+            toast({ title: "Success", description: "Document updated" });
+            setIsEditOpen(false);
+            resetEditForm();
+        },
+        onError: (err: any) => {
+            toast({ title: "Failed", description: err.message || "Failed to update document", variant: 'destructive' });
+        }
+    });
+    // Open edit modal and pre-fill state
+    const handleEdit = (doc: any) => {
+        setEditDoc(doc);
+        setEditLinkUrl(doc.linkUrl || "");
+        setEditLinkTitle(doc.title || doc.fileName || "");
+        setEditSelectedCategory(doc.categoryId || "");
+        setEditSelectedManufacturer(doc.manufacturerId || "");
+        setIsEditOpen(true);
+    };
+    const handleEditSave = (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!editDoc) return;
+        if (!editLinkTitle || !editLinkUrl) {
+            toast({ title: 'Missing fields', description: 'Please provide a title and a link URL', variant: 'destructive' });
+            return;
+        }
+        const payload: any = {
+            type: 'link',
+            title: editLinkTitle,
+            linkUrl: editLinkUrl,
+            categoryId: editSelectedCategory || undefined,
+            manufacturerId: editSelectedManufacturer || undefined,
+        };
+        updateLinkMutation.mutate({ id: editDoc._id, payload });
     };
 
     const handleUpload = (e: React.FormEvent) => {
@@ -178,6 +237,7 @@ export default function MachineDocumentsPage() {
                 return;
             }
             const payload: any = {
+                type: 'link',
                 title: linkTitle,
                 linkUrl: linkUrl,
                 categoryId: selectedCategory || undefined,
@@ -460,6 +520,79 @@ export default function MachineDocumentsPage() {
                                                                         <ExternalLink className="h-4 w-4" />
                                                                     </Button>
                                                                 )}
+                                                <Button
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    className="h-8 w-8 text-gray-400 hover:text-yellow-500 hover:bg-yellow-50"
+                                                    title="Edit document"
+                                                    onClick={() => handleEdit(doc)}
+                                                >
+                                                    <FileText className="h-4 w-4" />
+                                                </Button>
+                                                            {/* Edit Modal (for link documents) */}
+                                                            <Dialog open={isEditOpen} onOpenChange={(open) => { setIsEditOpen(open); if (!open) resetEditForm(); }}>
+                                                                <DialogContent className="sm:max-w-[600px]">
+                                                                    <form onSubmit={handleEditSave}>
+                                                                        <DialogHeader>
+                                                                            <DialogTitle>Edit Machine Document</DialogTitle>
+                                                                            <DialogDescription>
+                                                                                Update the document link and details. Only link-based documents can be edited here.
+                                                                            </DialogDescription>
+                                                                        </DialogHeader>
+                                                                        <div className="grid gap-4 py-4">
+                                                                            <div className="grid gap-2">
+                                                                                <Label htmlFor="editLinkTitle">Title</Label>
+                                                                                <Input id="editLinkTitle" placeholder="Document title" value={editLinkTitle} onChange={(e) => setEditLinkTitle(e.target.value)} />
+                                                                            </div>
+                                                                            <div className="grid gap-2">
+                                                                                <Label htmlFor="editLinkUrl">Link URL</Label>
+                                                                                <Input id="editLinkUrl" placeholder="https://..." value={editLinkUrl} onChange={(e) => setEditLinkUrl(e.target.value)} />
+                                                                            </div>
+                                                                            <div className="grid gap-2">
+                                                                                <Label>Category</Label>
+                                                                                <div className="flex gap-2">
+                                                                                    <select className="flex-1" value={editSelectedCategory} onChange={(e) => setEditSelectedCategory(e.target.value)}>
+                                                                                        <option value="">-- Select category --</option>
+                                                                                        {categories.map((c: any) => (
+                                                                                            <option key={c._id} value={c._id}>{c.name}</option>
+                                                                                        ))}
+                                                                                    </select>
+                                                                                </div>
+                                                                            </div>
+                                                                            <div className="grid gap-2">
+                                                                                <Label>Manufacturer</Label>
+                                                                                <div className="flex gap-2">
+                                                                                    <select className="flex-1" value={editSelectedManufacturer} onChange={(e) => setEditSelectedManufacturer(e.target.value)}>
+                                                                                        <option value="">-- Select manufacturer --</option>
+                                                                                        {manufacturers.map((m: any) => (
+                                                                                            <option key={m._id} value={m._id}>{m.name}</option>
+                                                                                        ))}
+                                                                                    </select>
+                                                                                </div>
+                                                                            </div>
+                                                                        </div>
+                                                                        <DialogFooter>
+                                                                            <Button
+                                                                                type="submit"
+                                                                                className="bg-yellow-500 hover:bg-yellow-600 w-full"
+                                                                                disabled={updateLinkMutation.isLoading || !editLinkTitle || !editLinkUrl}
+                                                                            >
+                                                                                {updateLinkMutation.isLoading ? (
+                                                                                    <>
+                                                                                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                                                                        Saving...
+                                                                                    </>
+                                                                                ) : (
+                                                                                    <>
+                                                                                        <FileText className="h-4 w-4 mr-2" />
+                                                                                        Save Changes
+                                                                                    </>
+                                                                                )}
+                                                                            </Button>
+                                                                        </DialogFooter>
+                                                                    </form>
+                                                                </DialogContent>
+                                                            </Dialog>
                                                 <Button
                                                     variant="ghost"
                                                     size="icon"
