@@ -29,7 +29,7 @@ export async function generatePlannersSummaryPDF(
   
   // Add logo
   try {
-    const logoImg = await loadImage('/accordlogo.png');
+    const logoImg = await loadImage('/accordlogo_optimized.png');
     doc.addImage(logoImg, 'PNG', 15, 10, 40, 20);
   } catch (error) {
     console.error('Failed to load logo:', error);
@@ -198,7 +198,7 @@ export async function generateIndividualPlannerPDF(
   
   // Add logo
   try {
-    const logoImg = await loadImage('/accordlogo.png');
+    const logoImg = await loadImage('/accordlogo_optimized.png');
     doc.addImage(logoImg, 'PNG', 15, 10, 40, 20);
   } catch (error) {
     console.error('Failed to load logo:', error);

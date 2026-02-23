@@ -6,13 +6,13 @@ import { format, subDays, startOfMonth, endOfMonth, isWithinInterval, parseISO }
 import { apiService } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 import { authService } from "@/lib/auth";
+import { Card, CardHeader, CardContent, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import {
   Users, MapPin, TrendingUp, TrendingDown, Activity,
   Calendar, ArrowRight, UserCheck, AlertCircle, FileText,
   Briefcase, CheckCircle2, Clock, XCircle, ChevronDown, Filter,
-  Menu, Settings, LogOut, PieChart
+  Menu, Settings, LogOut, PieChart, User, Package
 } from "lucide-react";
 import { Sheet, SheetContent, SheetTrigger, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Line, Doughnut, Bar } from "react-chartjs-2";
@@ -96,6 +96,8 @@ export function DashboardOverview() {
   const [showReports, setShowReports] = useState(false);
   const [showQuotations, setShowQuotations] = useState(false);
   const [showContactData, setShowContactData] = useState(false);
+  // Facility/Visit detail modal
+  const [selectedVisit, setSelectedVisit] = useState(null);
 
   // --- 1. Data Fetching ---
 
@@ -718,9 +720,14 @@ export function DashboardOverview() {
                   </span>
                   <div className="flex flex-col bg-white p-4 rounded-xl border border-slate-100 shadow-sm active:scale-[0.98] transition-all">
                     <div className="flex justify-between items-start">
-                      <h4 className="text-sm font-bold text-slate-900 line-clamp-1">
+                      <button
+                        className="text-sm font-bold text-[#0089f4] hover:underline line-clamp-1 bg-transparent border-none p-0 m-0 cursor-pointer"
+                        style={{ background: 'none', border: 'none' }}
+                        onClick={() => setSelectedVisit(visit)}
+                        title="View facility details"
+                      >
                         {visit.client?.name || "Unknown Client"}
-                      </h4>
+                      </button>
                       <span className="text-[10px] font-medium text-slate-400 whitespace-nowrap ml-2">
                         {format(parseISO(visit.startTime), "HH:mm")}
                       </span>
@@ -746,6 +753,84 @@ export function DashboardOverview() {
               ))}
               {processedData.recentActivity.length === 0 && <p className="ml-6 text-slate-500 text-sm">No recent activity found.</p>}
             </div>
+            {/* Facility/Visit Detail Modal */}
+            {selectedVisit && (
+              <div className="fixed inset-0 z-50 flex items-center justify-center">
+                <div className="absolute inset-0 backdrop-blur-sm bg-slate-900/30 transition-all" onClick={() => setSelectedVisit(null)} />
+                <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full p-8 relative animate-fade-in border border-blue-100">
+                  <button
+                    className="absolute top-4 right-4 text-slate-400 hover:text-red-500 text-xl font-bold"
+                    onClick={() => setSelectedVisit(null)}
+                    aria-label="Close"
+                  >
+                    ×
+                  </button>
+                  <div className="mb-6">
+                    <h2 className="text-2xl font-bold text-[#0089f4] mb-2">{selectedVisit.client?.name || 'Unknown Facility'}</h2>
+                    <div className="flex items-center gap-2 text-slate-600 mb-2">
+                      <MapPin className="w-4 h-4" />
+                      <span>{selectedVisit.client?.location || 'N/A'}</span>
+                      {selectedVisit.client?.coordinates && (
+                        <span className="text-xs text-slate-400 ml-2">{selectedVisit.client.coordinates.lat}, {selectedVisit.client.coordinates.lng}</span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2 text-slate-600 mb-2">
+                      <Users className="w-4 h-4" />
+                      <span>Visited by: {selectedVisit.user?.firstName || selectedVisit.user?.email || 'Unknown'}{selectedVisit.user?.lastName ? ` ${selectedVisit.user.lastName}` : ''}</span>
+                      {selectedVisit.user?.email && (
+                        <span className="text-xs text-slate-400 ml-2">{selectedVisit.user.email}</span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2 text-slate-600 mb-2">
+                      <Calendar className="w-4 h-4" />
+                      <span>{format(parseISO(selectedVisit.startTime), 'PPP')}</span>
+                    </div>
+                  </div>
+                  <div className="mb-4">
+                    <h3 className="text-lg font-semibold text-slate-900 mb-2">Contacts Met</h3>
+                    {selectedVisit.contacts && selectedVisit.contacts.length > 0 ? (
+                      <ul className="space-y-2">
+                        {selectedVisit.contacts.map((c: any, idx: number) => (
+                          <li key={idx} className="flex items-center gap-2 text-slate-700">
+                            <User className="w-4 h-4" />
+                            <span>{c.name}</span>
+                            <span className="text-xs text-slate-500">({c.role})</span>
+                            {c.phone && <span className="text-xs text-slate-400 ml-2">📞 {c.phone}</span>}
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p className="text-slate-500 italic">No contacts recorded.</p>
+                    )}
+                  </div>
+                  <div className="mb-4">
+                    <h3 className="text-lg font-semibold text-slate-900 mb-2">Products of Interest</h3>
+                    {selectedVisit.productsOfInterest && selectedVisit.productsOfInterest.length > 0 ? (
+                      <ul className="space-y-2">
+                        {selectedVisit.productsOfInterest.map((p: any, idx: number) => (
+                          <li key={idx} className="flex items-center gap-2 text-slate-700">
+                            <Package className="w-4 h-4" />
+                            <span>{typeof p === 'string' ? p : p.name || 'Product'}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p className="text-slate-500 italic">No products recorded.</p>
+                    )}
+                  </div>
+                  <div className="mb-4">
+                    <h3 className="text-lg font-semibold text-slate-900 mb-2">Visit Details & Recommendation</h3>
+                    <p className="text-slate-700 mb-2">Purpose: <span className="font-medium">{selectedVisit.visitPurpose || 'N/A'}</span></p>
+                    <p className="text-slate-700 mb-2">Outcome: <span className="font-medium">{selectedVisit.visitOutcome || 'N/A'}</span></p>
+                    <p className="text-slate-700 mb-2">Notes: <span className="font-medium">{selectedVisit.notes || 'No notes'}</span></p>
+                  </div>
+                  <div className="mb-4">
+                    <h3 className="text-lg font-semibold text-slate-900 mb-2">Sales Rep Recommendation</h3>
+                    <p className="text-slate-700">{selectedVisit.recommendation || 'No recommendation provided.'}</p>
+                  </div>
+                </div>
+              </div>
+            )}
           </CardContent>
         </Card>
 
