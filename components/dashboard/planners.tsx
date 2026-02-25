@@ -5,13 +5,13 @@ import dynamic from 'next/dynamic';
 // Dynamically import PlannerApprovalStatusWithAction to avoid SSR issues with SWR
 const PlannerApprovalStatusWithAction = dynamic(() => import('@/components/planner-approval/PlannerApprovalStatusWithAction'), { ssr: false });
 import { useRouter } from 'next/navigation';
-import { 
-  ArrowLeft, 
-  ChevronLeft, 
-  ChevronRight, 
-  Calendar, 
-  Users, 
-  DollarSign, 
+import {
+  ArrowLeft,
+  ChevronLeft,
+  ChevronRight,
+  Calendar,
+  Users,
+  DollarSign,
   RefreshCw,
   FileText,
   TrendingUp,
@@ -42,26 +42,26 @@ export default function PlannersComponent() {
   const [sortBy, setSortBy] = useState<'date' | 'name'>('date');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [generatingPdf, setGeneratingPdf] = useState(false);
-  
+
   const weekRange = getWeekRange(currentWeekStart);
   const uniqueUsers = getUniquePlannerUsers(planners);
-  
+
   // Filter planners by the actual planned week dates (not createdAt)
   const plannersForSelectedWeek = planners.filter(planner => {
     if (!planner.days || planner.days.length === 0) return false;
-    
+
     // Check if any of the planner's days fall within the selected week
     const weekStart = new Date(weekRange.from);
     const weekEnd = new Date(weekRange.to);
-    
+
     return planner.days.some(day => {
       if (!day.date) return false;
       const dayDate = new Date(day.date);
       return dayDate >= weekStart && dayDate <= weekEnd;
     });
   });
-  
-  const filteredPlanners = selectedUserId 
+
+  const filteredPlanners = selectedUserId
     ? plannersForSelectedWeek.filter(p => p.userId?._id === selectedUserId)
     : plannersForSelectedWeek;
   const totalAllowance = calculateTotalAllowance(filteredPlanners);
@@ -83,7 +83,7 @@ export default function PlannersComponent() {
       fourWeeksAgo.setDate(fourWeeksAgo.getDate() - 28);
       const fourWeeksAhead = new Date(currentWeekStart);
       fourWeeksAhead.setDate(fourWeeksAhead.getDate() + 28);
-      
+
       const response = await fetchAdminPlanners({
         token,
         from: fourWeeksAgo.toISOString(),
@@ -208,7 +208,7 @@ export default function PlannersComponent() {
               </button>
             </div>
           </div>
-          
+
           <div className="flex items-center justify-between">
             <button
               onClick={goToPreviousWeek}
@@ -216,7 +216,7 @@ export default function PlannersComponent() {
             >
               <ChevronLeft className="h-6 w-6 text-gray-600" />
             </button>
-            
+
             <div className="text-center">
               <div className="text-2xl font-bold text-gray-900">
                 {formatWeekRange(weekRange.from)}
@@ -225,7 +225,7 @@ export default function PlannersComponent() {
                 {new Date(weekRange.from).getFullYear()}
               </div>
             </div>
-            
+
             <button
               onClick={goToNextWeek}
               className="p-2 rounded-lg hover:bg-gray-100 transition-colors"
@@ -330,12 +330,12 @@ export default function PlannersComponent() {
         <div className="space-y-4">
           {filteredPlanners.map((planner) => {
             const weeklyAllowance = calculateWeeklyAllowance(planner);
-            
+
             // Skip planners with null userId
             if (!planner.userId) return null;
-            
-              return (
-                <div key={planner._id} className="bg-white rounded-xl shadow-lg border-2 border-gray-100 overflow-hidden">
+
+            return (
+              <div key={planner._id} className="bg-white rounded-xl shadow-lg border-2 border-gray-100 overflow-hidden">
                 {/* Planner Header */}
                 <div className="bg-gradient-to-r from-[#008cf7]/10 to-[#006bb8]/10 border-b-2 border-gray-100 p-6">
                   <div className="flex items-start justify-between">
@@ -369,7 +369,7 @@ export default function PlannersComponent() {
                       </div>
                     </div>
                   </div>
-                  
+
                   {planner.notes && (
                     <div className="mt-4 p-3 bg-white/50 rounded-lg border border-[#008cf7]/20">
                       <div className="flex items-start space-x-2">
@@ -384,8 +384,8 @@ export default function PlannersComponent() {
                 <div className="p-6">
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
                     {planner.days.map((day, idx) => (
-                      <div 
-                        key={idx} 
+                      <div
+                        key={idx}
                         className="border-2 border-gray-100 rounded-lg p-4 hover:border-purple-200 hover:shadow-md transition-all"
                       >
                         <div className="flex items-center justify-between mb-3">
@@ -434,67 +434,9 @@ export default function PlannersComponent() {
                   </div>
                 </div>
 
-                {/* Supervisor Review Section (below planner details) */}
+                {/* Supervisor / Accountant Review Section (below planner details) */}
                 <div className="px-6 pb-6">
                   <PlannerApprovalStatusWithAction plannerId={planner._id} />
-                </div>
-
-                {/* Days Grid */}
-                <div className="p-6">
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-                    {planner.days.map((day, idx) => (
-                      <div 
-                        key={idx} 
-                        className="border-2 border-gray-100 rounded-lg p-4 hover:border-purple-200 hover:shadow-md transition-all"
-                      >
-                        <div className="flex items-center justify-between mb-3">
-                          <h4 className="font-bold text-gray-900">{day.day}</h4>
-                          <span className="text-xs text-gray-500">
-                            {new Date(day.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                          </span>
-                        </div>
-                        
-                        <div className="space-y-2">
-                          <div className="flex items-start space-x-2">
-                            <MapPin className="h-4 w-4 text-purple-600 mt-0.5 flex-shrink-0" />
-                            <div className="text-sm">
-                              <div className="text-gray-500 text-xs">Place</div>
-                              <div className="font-medium text-gray-900">{day.place}</div>
-                            </div>
-                          </div>
-                          
-                          <div className="flex items-start space-x-2">
-                            <Car className="h-4 w-4 text-blue-600 mt-0.5 flex-shrink-0" />
-                            <div className="text-sm">
-                              <div className="text-gray-500 text-xs">Transport</div>
-                              <div className="font-medium text-gray-900">{day.means}</div>
-                            </div>
-                          </div>
-                          
-                          <div className="flex items-start space-x-2">
-                            <DollarSign className="h-4 w-4 text-green-600 mt-0.5 flex-shrink-0" />
-                            <div className="text-sm">
-                              <div className="text-gray-500 text-xs">Allowance</div>
-                              <div className="font-bold text-green-600">
-                                {new Intl.NumberFormat('en-KE', {
-                                  style: 'currency',
-                                  currency: 'KES',
-                                  minimumFractionDigits: 0
-                                }).format(parseFloat(day.allowance) || 0)}
-                              </div>
-                            </div>
-                          </div>
-                          
-                          {day.prospects && (
-                            <div className="mt-3 pt-3 border-t border-gray-100">
-                              <div className="text-xs text-gray-500 mb-1">Prospects</div>
-                              <div className="text-xs font-medium text-gray-700">{day.prospects}</div>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
                 </div>
               </div>
             );

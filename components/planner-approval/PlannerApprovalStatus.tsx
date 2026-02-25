@@ -1,10 +1,11 @@
 import React from 'react';
+import { apiService } from '@/lib/api';
 import useSWR from 'swr';
 
-const fetcher = (url: string) => fetch(url).then(res => res.json());
+const fetcher = (plannerId: string) => apiService.getPlannerApprovalStatus(plannerId);
 
 export default function PlannerApprovalStatus({ plannerId }: { plannerId: string }) {
-  const { data, error } = useSWR(`/api/planner-approval/${plannerId}`, fetcher);
+  const { data, error } = useSWR(plannerId ? `planner-status-${plannerId}` : null, () => fetcher(plannerId));
 
   if (error) return <div className="text-red-600">Failed to load approval status.</div>;
   if (!data) return <div>Loading approval status...</div>;

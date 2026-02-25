@@ -16,7 +16,7 @@ const API_BASE_URL: string = (process.env.NEXT_PUBLIC_API_BASE_URL as string) ||
 try {
   // eslint-disable-next-line no-console
   console.info("apiService: resolved API_BASE_URL =>", API_BASE_URL)
-} catch (e) {}
+} catch (e) { }
 
 export interface DashboardOverview {
   totalVisits: number
@@ -893,7 +893,7 @@ class ApiService {
           }
         }
       }
-    } catch (e) {}
+    } catch (e) { }
     const r = await this.makeRequest(`/manufacturers`);
     if (Array.isArray(r)) return { success: true, data: r }
     return r
@@ -911,7 +911,7 @@ class ApiService {
         const err = await resp.json().catch(() => null);
         throw new Error(err?.error || resp.statusText || 'Failed to create manufacturer');
       }
-    } catch (e) {}
+    } catch (e) { }
     return this.makeRequest(`/manufacturers`, {
       method: "POST",
       body: JSON.stringify(payload),
@@ -940,7 +940,7 @@ class ApiService {
     });
     if (!resp.ok) {
       let errMsg = resp.statusText;
-      try { const d = await resp.json(); if (d && d.message) errMsg = d.message; } catch {}
+      try { const d = await resp.json(); if (d && d.message) errMsg = d.message; } catch { }
       throw new Error(errMsg || 'Failed to create document link');
     }
     return resp.json();
@@ -1083,6 +1083,49 @@ class ApiService {
     return this.makeRequest(`/admin/data-store/templates/${encodeURIComponent(templateId)}`, {
       method: "DELETE",
     });
+  }
+
+  // ==================== Planner Approval ====================
+
+  /** Get approval status for a single planner */
+  async getPlannerApprovalStatus(plannerId: string): Promise<any> {
+    const response = await this.makeRequest(`/planner-approval/${encodeURIComponent(plannerId)}`);
+    return response?.data || response;
+  }
+
+  /** Supervisor: approve or disapprove a planner */
+  async supervisorPlannerAction(
+    plannerId: string,
+    status: 'approved' | 'disapproved',
+    comment?: string
+  ): Promise<any> {
+    return this.makeRequest(`/planner-approval/supervisor/${encodeURIComponent(plannerId)}`, {
+      method: 'POST',
+      body: JSON.stringify({ status, comment: comment ?? '' }),
+    });
+  }
+
+  /** Accountant: submit review with status, allowance, and optional comment on a supervisor-approved planner */
+  async accountantPlannerReview(
+    plannerId: string,
+    status: 'approved' | 'disapproved',
+    allowance: number,
+    comment?: string
+  ): Promise<any> {
+    return this.makeRequest(`/planner-approval/accountant/${encodeURIComponent(plannerId)}`, {
+      method: 'POST',
+      body: JSON.stringify({ status, allowance, comment: comment ?? '' }),
+    });
+  }
+
+  /** Supervisor: get list of planners pending their approval */
+  async getPendingSupervisorPlanners(): Promise<any> {
+    return this.makeRequest(`/planner-approval/pending-supervisor`);
+  }
+
+  /** Accountant: get list of planners pending accountant review (already supervisor-approved) */
+  async getPendingAccountantPlanners(): Promise<any> {
+    return this.makeRequest(`/planner-approval/pending-accountant`);
   }
 }
 
