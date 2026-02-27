@@ -98,7 +98,7 @@ export default function AccountantApprovalPanel() {
                 disabled={loading && selectedPlanner === planner._id}
               />
 
-              <label className="block text-sm font-medium text-gray-700 mb-1">Comments (Required if disapproving)</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Comments (Optional)</label>
               <textarea
                 className="w-full border rounded p-2 mb-2"
                 placeholder="Add an accountant comment"
@@ -113,18 +113,11 @@ export default function AccountantApprovalPanel() {
 
             <div className="flex gap-2">
               <button
-                className="bg-green-600 text-white px-4 py-1 rounded disabled:opacity-50"
+                className="bg-blue-600 text-white px-4 py-1 rounded disabled:opacity-50"
                 onClick={() => handleAction(planner._id, 'approved')}
                 disabled={loading && selectedPlanner === planner._id}
               >
-                {loading && selectedPlanner === planner._id ? 'Submitting...' : 'Approve'}
-              </button>
-              <button
-                className="bg-red-600 text-white px-4 py-1 rounded disabled:opacity-50"
-                onClick={() => handleAction(planner._id, 'disapproved')}
-                disabled={loading && selectedPlanner === planner._id}
-              >
-                {loading && selectedPlanner === planner._id ? 'Submitting...' : 'Disapprove'}
+                {loading && selectedPlanner === planner._id ? 'Submitting...' : 'Mark as Paid'}
               </button>
             </div>
           </li>

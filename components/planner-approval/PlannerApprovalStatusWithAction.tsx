@@ -138,18 +138,11 @@ function AccountantQuickAction({ plannerId, onDone }: { plannerId: string; onDon
       </div>
       <div className="flex gap-2">
         <button
-          className="bg-green-600 text-white px-4 py-1 rounded disabled:opacity-50"
+          className="bg-blue-600 text-white px-4 py-1 rounded disabled:opacity-50"
           onClick={() => handleAction('approved')}
           disabled={loading}
         >
-          {loading ? 'Submitting...' : 'Approve'}
-        </button>
-        <button
-          className="bg-red-600 text-white px-4 py-1 rounded disabled:opacity-50"
-          onClick={() => handleAction('disapproved')}
-          disabled={loading}
-        >
-          {loading ? 'Submitting...' : 'Disapprove'}
+          {loading ? 'Submitting...' : 'Mark as Paid'}
         </button>
       </div>
       {error && <div className="text-red-600 mt-1">{error}</div>}

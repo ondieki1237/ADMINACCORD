@@ -14,15 +14,23 @@ import { format, parseISO } from "date-fns";
 
 export function VisitContactData({ onClose }: { onClose: () => void }) {
     const [selectedVisitId, setSelectedVisitId] = useState<string | null>(null);
+    const [limit, setLimit] = useState(20);
 
     // Fetch recent visits to select from
-    const { data: recentVisits = [] } = useQuery({
-        queryKey: ["visits-recent-select"],
+    const { data, isLoading } = useQuery({
+        queryKey: ["visits-recent-select", limit],
         queryFn: async () => {
-            const json = await apiService.getVisits(1, 20); // Get latest 20
-            return (json.data?.docs || json.docs || []) as any[];
+            const json = await apiService.getVisits(1, limit);
+            return {
+                docs: (json.data?.docs || json.docs || []) as any[],
+                total: json.data?.totalDocs || json.totalDocs || json.data?.total || json.total || 0,
+            };
         }
     });
+
+    const recentVisits = data?.docs || [];
+    // Fallback logic for hasMore if total is missing
+    const hasMore = data?.total ? recentVisits.length < data.total : recentVisits.length >= limit;
 
     return (
         <div className="space-y-6">
@@ -62,6 +70,17 @@ export function VisitContactData({ onClose }: { onClose: () => void }) {
                                 </div>
                             ))}
                         </div>
+                        {hasMore && (
+                            <div className="mt-4 flex justify-center">
+                                <Button
+                                    variant="outline"
+                                    onClick={() => setLimit(prev => prev + 20)}
+                                    disabled={isLoading}
+                                >
+                                    {isLoading ? "Loading..." : "View More"}
+                                </Button>
+                            </div>
+                        )}
                     </CardContent>
                 </Card>
             ) : (

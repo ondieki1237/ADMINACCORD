@@ -11,7 +11,7 @@ import {
   ChevronRight,
   Calendar,
   Users,
-  DollarSign,
+  Wallet,
   RefreshCw,
   FileText,
   TrendingUp,
@@ -31,6 +31,7 @@ import {
   type Planner
 } from '@/lib/plannerHelpers';
 import { generatePlannersSummaryPDF, generateIndividualPlannerPDF } from '@/lib/plannerPdfGenerator';
+import { authService } from '@/lib/auth';
 
 export default function PlannersComponent() {
   const router = useRouter();
@@ -42,6 +43,10 @@ export default function PlannersComponent() {
   const [sortBy, setSortBy] = useState<'date' | 'name'>('date');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [generatingPdf, setGeneratingPdf] = useState(false);
+
+  // Check if current user is accountant
+  const currentUser = authService.getCurrentUserSync();
+  const isAccountant = currentUser?.email === 'accounts@accordmedical.co.ke';
 
   const weekRange = getWeekRange(currentWeekStart);
   const uniqueUsers = getUniquePlannerUsers(planners);
@@ -170,14 +175,24 @@ export default function PlannersComponent() {
           <ArrowLeft className="h-5 w-5" />
           <span className="font-medium">Back to Home</span>
         </button>
-        <div className="flex items-center space-x-4">
-          <div className="bg-gradient-to-br from-[#008cf7] to-[#006bb8] p-3 rounded-xl shadow-lg">
-            <Calendar className="h-8 w-8 text-white" />
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-4">
+            <div className="bg-gradient-to-br from-[#008cf7] to-[#006bb8] p-3 rounded-xl shadow-lg">
+              <Calendar className="h-8 w-8 text-white" />
+            </div>
+            <div>
+              <h1 className="text-3xl font-bold text-gray-900">Weekly Planners</h1>
+              <p className="text-gray-500">Track field activity plans and allowances</p>
+            </div>
           </div>
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900">Weekly Planners</h1>
-            <p className="text-gray-500">Track field activity plans and allowances</p>
-          </div>
+          {isAccountant && (
+            <button
+              onClick={() => router.push('/dashboard/planners/summary')}
+              className="px-4 py-2 bg-green-600 text-white font-medium rounded-lg shadow hover:bg-green-700 transition"
+            >
+              View Expenditure Summary
+            </button>
+          )}
         </div>
       </div>
 
@@ -238,7 +253,7 @@ export default function PlannersComponent() {
         {/* Total Allowance */}
         <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-xl shadow-lg border-2 border-green-200 p-6">
           <div className="flex items-center justify-between mb-2">
-            <DollarSign className="h-8 w-8 text-green-600" />
+            <Wallet className="h-8 w-8 text-green-600" />
           </div>
           <div className="text-sm text-gray-600 mb-1">Total Weekly Allowance</div>
           <div className="text-3xl font-bold text-gray-900">
@@ -410,7 +425,7 @@ export default function PlannersComponent() {
                             </div>
                           </div>
                           <div className="flex items-start space-x-2">
-                            <DollarSign className="h-4 w-4 text-green-600 mt-0.5 flex-shrink-0" />
+                            <Wallet className="h-4 w-4 text-green-600 mt-0.5 flex-shrink-0" />
                             <div className="text-sm">
                               <div className="text-gray-500 text-xs">Allowance</div>
                               <div className="font-bold text-green-600">

@@ -98,6 +98,8 @@ export function DashboardOverview() {
   const [showContactData, setShowContactData] = useState(false);
   // Facility/Visit detail modal
   const [selectedVisit, setSelectedVisit] = useState(null);
+  // Recent Activity Pagination (must be at top level)
+  const [recentActivityLimit, setRecentActivityLimit] = useState(7);
 
   // --- 1. Data Fetching ---
 

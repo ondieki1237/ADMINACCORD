@@ -54,7 +54,7 @@ export interface FetchPlannersParams {
  */
 export async function fetchAdminPlanners(params: FetchPlannersParams): Promise<PlannerResponse> {
   const {
-    baseUrl = 'https://app.codewithseth.co.ke/api',
+    baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:4500/api',
     token,
     page = 1,
     limit = 50,
@@ -101,18 +101,18 @@ export async function fetchAdminPlanners(params: FetchPlannersParams): Promise<P
 export function getWeekRange(date: Date = new Date()): { from: string; to: string } {
   const current = new Date(date);
   const dayOfWeek = current.getDay();
-  
+
   // Get Monday (0 = Sunday, 1 = Monday, etc.)
   const monday = new Date(current);
   const diff = dayOfWeek === 0 ? -6 : 1 - dayOfWeek; // If Sunday, go back 6 days
   monday.setDate(current.getDate() + diff);
   monday.setHours(0, 0, 0, 0);
-  
+
   // Get Sunday
   const sunday = new Date(monday);
   sunday.setDate(monday.getDate() + 6);
   sunday.setHours(23, 59, 59, 999);
-  
+
   return {
     from: monday.toISOString(),
     to: sunday.toISOString()
@@ -126,11 +126,11 @@ export function getPreviousWeekRange(currentWeekStart: Date): { from: string; to
   const monday = new Date(currentWeekStart);
   monday.setDate(monday.getDate() - 7);
   monday.setHours(0, 0, 0, 0);
-  
+
   const sunday = new Date(monday);
   sunday.setDate(monday.getDate() + 6);
   sunday.setHours(23, 59, 59, 999);
-  
+
   return {
     from: monday.toISOString(),
     to: sunday.toISOString()
@@ -144,11 +144,11 @@ export function getNextWeekRange(currentWeekStart: Date): { from: string; to: st
   const monday = new Date(currentWeekStart);
   monday.setDate(monday.getDate() + 7);
   monday.setHours(0, 0, 0, 0);
-  
+
   const sunday = new Date(monday);
   sunday.setDate(monday.getDate() + 6);
   sunday.setHours(23, 59, 59, 999);
-  
+
   return {
     from: monday.toISOString(),
     to: sunday.toISOString()
@@ -177,7 +177,7 @@ export function calculateTotalAllowance(planners: Planner[]): number {
  */
 export function groupPlannersByUser(planners: Planner[]): Map<string, Planner[]> {
   const grouped = new Map<string, Planner[]>();
-  
+
   planners.forEach(planner => {
     const userId = planner.userId._id;
     if (!grouped.has(userId)) {
@@ -185,7 +185,7 @@ export function groupPlannersByUser(planners: Planner[]): Map<string, Planner[]>
     }
     grouped.get(userId)!.push(planner);
   });
-  
+
   return grouped;
 }
 
@@ -196,11 +196,11 @@ export function formatWeekRange(weekStartDate: string): string {
   const start = new Date(weekStartDate);
   const end = new Date(start);
   end.setDate(start.getDate() + 6);
-  
+
   const formatOptions: Intl.DateTimeFormatOptions = { month: 'short', day: 'numeric' };
   const startStr = start.toLocaleDateString('en-US', formatOptions);
   const endStr = end.toLocaleDateString('en-US', formatOptions);
-  
+
   return `${startStr} - ${endStr}`;
 }
 
@@ -209,12 +209,12 @@ export function formatWeekRange(weekStartDate: string): string {
  */
 export function getUniquePlannerUsers(planners: Planner[]) {
   const usersMap = new Map();
-  
+
   planners.forEach(planner => {
     if (planner.userId && planner.userId._id && !usersMap.has(planner.userId._id)) {
       usersMap.set(planner.userId._id, planner.userId);
     }
   });
-  
+
   return Array.from(usersMap.values());
 }
