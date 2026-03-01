@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { apiService } from "@/lib/api";
+import { apiService, API_BASE_URL } from "@/lib/api";
 import { authService } from "@/lib/auth";
 import { hasAdminAccess } from "@/lib/permissions";
 import { Button } from "@/components/ui/button";
@@ -89,9 +89,8 @@ export default function MachineDocumentsPage() {
 
     // fetch categories & manufacturers for selection (always from backend API base URL)
     useEffect(() => {
-        const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:4500/api';
-        fetch(`${API_BASE}/document-categories`).then(res => res.json()).then(json => setCategories(json.data || []));
-        fetch(`${API_BASE}/manufacturers`).then(res => res.json()).then(json => setManufacturers(json.data || []));
+        fetch(`${API_BASE_URL}/document-categories`).then(res => res.json()).then(json => setCategories(json.data || []));
+        fetch(`${API_BASE_URL}/manufacturers`).then(res => res.json()).then(json => setManufacturers(json.data || []));
     }, []);
 
     const uploadMutation = useMutation({

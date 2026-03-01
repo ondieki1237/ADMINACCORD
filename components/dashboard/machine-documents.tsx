@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { apiService } from '@/lib/api';
+import { apiService, API_BASE_URL } from '@/lib/api';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
 
@@ -36,8 +36,7 @@ export default function MachineDocuments() {
   const { data: categoriesData } = useQuery({
     queryKey: ['document-categories'],
     queryFn: async () => {
-      const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:4500/api';
-      const res = await fetch(`${API_BASE}/document-categories`);
+      const res = await fetch(`${API_BASE_URL}/document-categories`);
       const json = await res.json();
       return json.data || [];
     },
@@ -45,8 +44,7 @@ export default function MachineDocuments() {
   const { data: manufacturersData } = useQuery({
     queryKey: ['manufacturers'],
     queryFn: async () => {
-      const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:4500/api';
-      const res = await fetch(`${API_BASE}/manufacturers`);
+      const res = await fetch(`${API_BASE_URL}/manufacturers`);
       const json = await res.json();
       return json.data || [];
     },

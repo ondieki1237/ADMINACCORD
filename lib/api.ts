@@ -6,7 +6,7 @@ import type { Visit as VisitType } from "./types/visits"
 // Development: if running in browser on localhost use local backend at port 4500
 // Fallback: deployed production URL
 const DEFAULT_PROD_API = "https://app.codewithseth.co.ke/api"
-const API_BASE_URL: string = (process.env.NEXT_PUBLIC_API_BASE_URL as string) || (
+export const API_BASE_URL: string = (process.env.NEXT_PUBLIC_API_BASE_URL as string) || (
   (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'))
     ? 'http://localhost:4500/api'
     : DEFAULT_PROD_API

@@ -49,12 +49,14 @@ export interface FetchPlannersParams {
   signal?: AbortSignal;
 }
 
+import { API_BASE_URL } from './api';
+
 /**
  * Fetch planners from admin API
  */
 export async function fetchAdminPlanners(params: FetchPlannersParams): Promise<PlannerResponse> {
   const {
-    baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:4500/api',
+    baseUrl = API_BASE_URL,
     token,
     page = 1,
     limit = 50,
