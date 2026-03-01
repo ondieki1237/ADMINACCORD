@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { format, subDays, startOfMonth, endOfMonth, isWithinInterval, parseISO } from "date-fns";
+import { format, subDays, startOfMonth, endOfMonth, isWithinInterval, parseISO, setMonth, setYear } from "date-fns";
 import { apiService } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 import { authService } from "@/lib/auth";
@@ -32,6 +32,7 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import VisitsPage from "./visitmanager";
 import Reports from "./reports";
 import QuotationList from "./quotations";
@@ -88,7 +89,9 @@ const COLORS = {
 export function DashboardOverview() {
   const { toast } = useToast();
   const [currentUser, setCurrentUser] = useState(authService.getCurrentUserSync());
-  const [dateRange, setDateRange] = useState("thisMonth"); // "thisWeek", "thisMonth", "lastMonth"
+  const [dateRange, setDateRange] = useState("thisMonth"); // "thisWeek", "thisMonth", "lastMonth", "customMonth"
+  const [customMonth, setCustomMonth] = useState<{ month: number; year: number }>({ month: new Date().getMonth(), year: new Date().getFullYear() });
+  const [showMonthPicker, setShowMonthPicker] = useState(false);
   const [filterRegion, setFilterRegion] = useState("all");
 
   // Sub-page navigation states
@@ -165,6 +168,10 @@ export function DashboardOverview() {
     } else if (dateRange === "allTime") {
       start = subDays(today, 3650); // 10 years ago
       end = today;
+    } else if (dateRange === "customMonth") {
+      const customDate = setYear(setMonth(new Date(), customMonth.month), customMonth.year);
+      start = startOfMonth(customDate);
+      end = endOfMonth(customDate);
     }
 
     // Fallback: If "All Time" needed, we might need a new filter option.
@@ -348,7 +355,7 @@ export function DashboardOverview() {
       recentActivity: filteredVisits.slice(0, 7), // Latest 7
       trendData: dailyVisits
     };
-  }, [visits, leads, users, dateRange]);
+  }, [visits, leads, users, dateRange, customMonth]);
 
 
   // --- 3. Sub-page Rendering ---
@@ -445,11 +452,16 @@ export function DashboardOverview() {
         {/* Right Actions (Filter & Desktop Nav) */}
         <div className="flex items-center gap-2 md:gap-3">
           {/* Date Filter - Icon on Mobile, Full on Desktop */}
-          <div className="hidden md:block">
-            <Select value={dateRange} onValueChange={setDateRange}>
+          <div className="hidden md:flex items-center gap-2">
+            <Select value={dateRange} onValueChange={(v) => { if (v !== "customMonth") setDateRange(v); }}>
               <SelectTrigger className="w-[150px]">
                 <Calendar className="w-4 h-4 mr-2" />
-                <SelectValue placeholder="Period" />
+                <SelectValue placeholder="Period">
+                  {dateRange === "customMonth" 
+                    ? format(setYear(setMonth(new Date(), customMonth.month), customMonth.year), "MMMM yyyy")
+                    : undefined
+                  }
+                </SelectValue>
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="thisWeek">This Week</SelectItem>
@@ -458,21 +470,122 @@ export function DashboardOverview() {
                 <SelectItem value="allTime">All Time</SelectItem>
               </SelectContent>
             </Select>
+            
+            {/* Month Picker Popover */}
+            <Popover open={showMonthPicker} onOpenChange={setShowMonthPicker}>
+              <PopoverTrigger asChild>
+                <Button 
+                  variant={dateRange === "customMonth" ? "default" : "outline"}
+                  size="sm"
+                  className={dateRange === "customMonth" ? "bg-[#0089f4] hover:bg-blue-600" : ""}
+                >
+                  <Calendar className="w-4 h-4 mr-1" />
+                  Pick Month
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-64 p-4" align="end">
+                <div className="space-y-4">
+                  <p className="text-sm font-medium text-gray-700">Select a month</p>
+                  <div className="grid grid-cols-3 gap-2">
+                    {Array.from({ length: 12 }, (_, i) => (
+                      <Button
+                        key={i}
+                        variant={customMonth.month === i && dateRange === "customMonth" ? "default" : "outline"}
+                        size="sm"
+                        className={`text-xs ${customMonth.month === i && dateRange === "customMonth" ? "bg-[#0089f4]" : ""}`}
+                        onClick={() => {
+                          setCustomMonth(prev => ({ ...prev, month: i }));
+                          setDateRange("customMonth");
+                        }}
+                      >
+                        {format(setMonth(new Date(), i), "MMM")}
+                      </Button>
+                    ))}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setCustomMonth(prev => ({ ...prev, year: prev.year - 1 }))}
+                    >
+                      ←
+                    </Button>
+                    <span className="flex-1 text-center font-medium">{customMonth.year}</span>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setCustomMonth(prev => ({ ...prev, year: prev.year + 1 }))}
+                      disabled={customMonth.year >= new Date().getFullYear()}
+                    >
+                      →
+                    </Button>
+                  </div>
+                  <Button 
+                    className="w-full bg-[#0089f4] hover:bg-blue-600" 
+                    size="sm"
+                    onClick={() => {
+                      setDateRange("customMonth");
+                      setShowMonthPicker(false);
+                    }}
+                  >
+                    Apply
+                  </Button>
+                </div>
+              </PopoverContent>
+            </Popover>
           </div>
 
           {/* Mobile Filter Icon (Simplified) */}
           <div className="md:hidden">
-            <Select value={dateRange} onValueChange={setDateRange}>
-              <SelectTrigger className="w-10 h-10 p-0 flex items-center justify-center rounded-full border border-slate-200">
-                <Filter className="w-4 h-4 text-slate-600" />
-              </SelectTrigger>
-              <SelectContent align="end">
-                <SelectItem value="thisWeek">This Week</SelectItem>
-                <SelectItem value="thisMonth">This Month</SelectItem>
-                <SelectItem value="lastMonth">Last Month</SelectItem>
-                <SelectItem value="allTime">All Time</SelectItem>
-              </SelectContent>
-            </Select>
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="outline" size="icon" className="w-10 h-10 rounded-full">
+                  <Filter className="w-4 h-4 text-slate-600" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-72 p-4" align="end">
+                <div className="space-y-4">
+                  <p className="text-sm font-medium text-gray-700">Quick Filters</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    {["thisWeek", "thisMonth", "lastMonth", "allTime"].map((range) => (
+                      <Button
+                        key={range}
+                        variant={dateRange === range ? "default" : "outline"}
+                        size="sm"
+                        className={dateRange === range ? "bg-[#0089f4]" : ""}
+                        onClick={() => setDateRange(range)}
+                      >
+                        {range === "thisWeek" ? "This Week" : range === "thisMonth" ? "This Month" : range === "lastMonth" ? "Last Month" : "All Time"}
+                      </Button>
+                    ))}
+                  </div>
+                  <div className="border-t pt-4">
+                    <p className="text-sm font-medium text-gray-700 mb-3">Choose Month</p>
+                    <div className="grid grid-cols-4 gap-1">
+                      {Array.from({ length: 12 }, (_, i) => (
+                        <Button
+                          key={i}
+                          variant={customMonth.month === i && dateRange === "customMonth" ? "default" : "ghost"}
+                          size="sm"
+                          className={`text-xs p-1 h-8 ${customMonth.month === i && dateRange === "customMonth" ? "bg-[#0089f4]" : ""}`}
+                          onClick={() => {
+                            setCustomMonth(prev => ({ ...prev, month: i }));
+                            setDateRange("customMonth");
+                          }}
+                        >
+                          {format(setMonth(new Date(), i), "MMM")}
+                        </Button>
+                      ))}
+                    </div>
+                    <div className="flex items-center gap-2 mt-3">
+                      <Button variant="outline" size="sm" onClick={() => setCustomMonth(prev => ({ ...prev, year: prev.year - 1 }))}>←</Button>
+                      <span className="flex-1 text-center font-medium text-sm">{customMonth.year}</span>
+                      <Button variant="outline" size="sm" onClick={() => setCustomMonth(prev => ({ ...prev, year: prev.year + 1 }))} disabled={customMonth.year >= new Date().getFullYear()}>→</Button>
+                    </div>
+                  </div>
+                </div>
+              </PopoverContent>
+            </Popover>
           </div>
 
           {/* Desktop Actions */}

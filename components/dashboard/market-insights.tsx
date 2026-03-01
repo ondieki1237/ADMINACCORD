@@ -2,13 +2,14 @@
 
 import React, { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { format, subDays, startOfMonth, endOfMonth, parseISO } from "date-fns";
+import { format, subDays, startOfMonth, endOfMonth, parseISO, setMonth, setYear } from "date-fns";
 import { apiService } from "@/lib/api";
 import { Card, CardHeader, CardContent, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import {
@@ -147,6 +148,8 @@ export default function MarketInsights() {
   
   // Filter states
   const [dateRange, setDateRange] = useState("thisMonth");
+  const [customMonth, setCustomMonth] = useState<{ month: number; year: number }>({ month: new Date().getMonth(), year: new Date().getFullYear() });
+  const [showMonthPicker, setShowMonthPicker] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedProduct, setSelectedProduct] = useState("all");
   const [selectedOutcome, setSelectedOutcome] = useState("all");
@@ -185,6 +188,11 @@ export default function MarketInsights() {
       case "thisYear":
         startDate = new Date(today.getFullYear(), 0, 1);
         break;
+      case "customMonth":
+        const customDate = setYear(setMonth(new Date(), customMonth.month), customMonth.year);
+        startDate = startOfMonth(customDate);
+        endDate = endOfMonth(customDate);
+        break;
       default:
         startDate = startOfMonth(today);
     }
@@ -193,7 +201,7 @@ export default function MarketInsights() {
       startDate: format(startDate, "yyyy-MM-dd"),
       endDate: format(endDate, "yyyy-MM-dd")
     };
-  }, [dateRange]);
+  }, [dateRange, customMonth]);
 
   // Fetch market summary
   const { data: summaryData, isLoading: summaryLoading } = useQuery({
@@ -442,10 +450,15 @@ export default function MarketInsights() {
             </div>
 
             <div className="flex items-center gap-3 flex-wrap">
-              <Select value={dateRange} onValueChange={(v) => { setDateRange(v); setCurrentPage(1); }}>
+              <Select value={dateRange} onValueChange={(v) => { if (v !== "customMonth") { setDateRange(v); setCurrentPage(1); } }}>
                 <SelectTrigger className="w-[160px] bg-white border-gray-200">
                   <Calendar className="w-4 h-4 mr-2 text-[#008cf7]" />
-                  <SelectValue />
+                  <SelectValue>
+                    {dateRange === "customMonth" 
+                      ? format(setYear(setMonth(new Date(), customMonth.month), customMonth.year), "MMMM yyyy")
+                      : undefined
+                    }
+                  </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="thisWeek">This Week</SelectItem>
@@ -455,6 +468,71 @@ export default function MarketInsights() {
                   <SelectItem value="thisYear">This Year</SelectItem>
                 </SelectContent>
               </Select>
+
+              {/* Month Picker */}
+              <Popover open={showMonthPicker} onOpenChange={setShowMonthPicker}>
+                <PopoverTrigger asChild>
+                  <Button 
+                    variant={dateRange === "customMonth" ? "default" : "outline"}
+                    size="sm"
+                    className={dateRange === "customMonth" ? "bg-[#008cf7] hover:bg-[#006bb8]" : "border-gray-200"}
+                  >
+                    <Calendar className="w-4 h-4 mr-1" />
+                    Pick Month
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-64 p-4" align="end">
+                  <div className="space-y-4">
+                    <p className="text-sm font-medium text-gray-700">Select a month</p>
+                    <div className="grid grid-cols-3 gap-2">
+                      {Array.from({ length: 12 }, (_, i) => (
+                        <Button
+                          key={i}
+                          variant={customMonth.month === i && dateRange === "customMonth" ? "default" : "outline"}
+                          size="sm"
+                          className={`text-xs ${customMonth.month === i && dateRange === "customMonth" ? "bg-[#008cf7]" : ""}`}
+                          onClick={() => {
+                            setCustomMonth(prev => ({ ...prev, month: i }));
+                            setDateRange("customMonth");
+                            setCurrentPage(1);
+                          }}
+                        >
+                          {format(setMonth(new Date(), i), "MMM")}
+                        </Button>
+                      ))}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setCustomMonth(prev => ({ ...prev, year: prev.year - 1 }))}
+                      >
+                        ←
+                      </Button>
+                      <span className="flex-1 text-center font-medium">{customMonth.year}</span>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setCustomMonth(prev => ({ ...prev, year: prev.year + 1 }))}
+                        disabled={customMonth.year >= new Date().getFullYear()}
+                      >
+                        →
+                      </Button>
+                    </div>
+                    <Button 
+                      className="w-full bg-[#008cf7] hover:bg-[#006bb8]" 
+                      size="sm"
+                      onClick={() => {
+                        setDateRange("customMonth");
+                        setCurrentPage(1);
+                        setShowMonthPicker(false);
+                      }}
+                    >
+                      Apply
+                    </Button>
+                  </div>
+                </PopoverContent>
+              </Popover>
 
               <Button
                 variant="outline"
