@@ -72,6 +72,13 @@ export function DashboardSidebar({ currentPage = "dashboard", onPageChange }: Da
       bgColor: "bg-blue-50"
     },
     {
+      icon: BarChart3,
+      label: "Market Insights",
+      path: "/dashboard/market-insights",
+      color: "text-blue-600",
+      bgColor: "bg-blue-50"
+    },
+    {
       icon: CalendarCheck,
       label: "Daily Reports",
       path: "/dashboard/daily-reports",

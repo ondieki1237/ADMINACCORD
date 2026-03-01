@@ -1127,6 +1127,56 @@ class ApiService {
   async getPendingAccountantPlanners(): Promise<any> {
     return this.makeRequest(`/planner-approval/pending-accountant`);
   }
+
+  // ==================== Market Insights ====================
+
+  /** Get market insights visit data with full filtering and pagination */
+  async getMarketInsights(params?: {
+    startDate?: string;
+    endDate?: string;
+    product?: string;
+    salesPerson?: string;
+    location?: string;
+    outcome?: string;
+    page?: number;
+    limit?: number;
+  }): Promise<any> {
+    const queryParams = new URLSearchParams();
+    if (params?.startDate) queryParams.append('startDate', params.startDate);
+    if (params?.endDate) queryParams.append('endDate', params.endDate);
+    if (params?.product) queryParams.append('product', params.product);
+    if (params?.salesPerson) queryParams.append('salesPerson', params.salesPerson);
+    if (params?.location) queryParams.append('location', params.location);
+    if (params?.outcome) queryParams.append('outcome', params.outcome);
+    if (params?.page) queryParams.append('page', params.page.toString());
+    if (params?.limit) queryParams.append('limit', params.limit.toString());
+    const queryString = queryParams.toString();
+    return this.makeRequest(`/admin/market-insights/visits${queryString ? `?${queryString}` : ''}`);
+  }
+
+  /** Get aggregated product insights */
+  async getMarketInsightsProducts(params?: {
+    startDate?: string;
+    endDate?: string;
+  }): Promise<any> {
+    const queryParams = new URLSearchParams();
+    if (params?.startDate) queryParams.append('startDate', params.startDate);
+    if (params?.endDate) queryParams.append('endDate', params.endDate);
+    const queryString = queryParams.toString();
+    return this.makeRequest(`/admin/market-insights/products${queryString ? `?${queryString}` : ''}`);
+  }
+
+  /** Get market summary with totals, outcomes, top products and locations */
+  async getMarketInsightsSummary(params?: {
+    startDate?: string;
+    endDate?: string;
+  }): Promise<any> {
+    const queryParams = new URLSearchParams();
+    if (params?.startDate) queryParams.append('startDate', params.startDate);
+    if (params?.endDate) queryParams.append('endDate', params.endDate);
+    const queryString = queryParams.toString();
+    return this.makeRequest(`/admin/market-insights/summary${queryString ? `?${queryString}` : ''}`);
+  }
 }
 
 export const apiService = new ApiService()
