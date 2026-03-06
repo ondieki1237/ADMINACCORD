@@ -271,11 +271,24 @@ const getNestedValue = (obj: any, path: string): any => {
       ? obj.contacts.map((c: any) => c.phone || "").filter(Boolean).join(", ")
       : ""
   }
-  // Special handling for product of interest from equipment array
-  if (path === "productOfInterest" && obj.equipment) {
-    return Array.isArray(obj.equipment) 
-      ? obj.equipment.map((e: any) => e.name || e.product || "").filter(Boolean).join(", ")
-      : (obj.productOfInterest || "")
+  // Special handling for product of interest - check multiple possible fields
+  if (path === "productOfInterest") {
+    // Check productsOfInterest array first (most common)
+    if (obj.productsOfInterest && Array.isArray(obj.productsOfInterest)) {
+      return obj.productsOfInterest
+        .map((p: any) => typeof p === 'string' ? p : (p.name || p.product || ""))
+        .filter(Boolean)
+        .join(", ");
+    }
+    // Check equipment array
+    if (obj.equipment && Array.isArray(obj.equipment)) {
+      return obj.equipment
+        .map((e: any) => e.name || e.product || "")
+        .filter(Boolean)
+        .join(", ");
+    }
+    // Fallback to direct productOfInterest field
+    return obj.productOfInterest || "";
   }
   // Default nested path resolution
   return path.split('.').reduce((acc, part) => acc && acc[part], obj)
@@ -304,6 +317,12 @@ const formatValueForExcel = (value: any, type: string, key?: string): any => {
       if (key === "equipment") {
         return value.map((e: any) => 
           `${e.name || e.product || ""}${e.quantity ? ` x${e.quantity}` : ""}`
+        ).filter(Boolean).join("; ")
+      }
+      // Format productsOfInterest array
+      if (key === "productsOfInterest") {
+        return value.map((p: any) => 
+          typeof p === 'string' ? p : (p.name || p.product || "")
         ).filter(Boolean).join("; ")
       }
       return JSON.stringify(value)
