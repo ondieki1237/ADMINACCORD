@@ -132,6 +132,7 @@ export default function AdvancedAnalytics() {
 
   const users = usersData || [];
   const filteredUsers = users.filter(u => 
+    u.role?.toLowerCase() !== 'admin' &&
     `${u.firstName} ${u.lastName} ${u.email}`.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
