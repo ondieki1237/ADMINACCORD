@@ -615,11 +615,11 @@ export default function ServiceRequests() {
                                                 {selectedRequest.assignedEngineer ? (
                                                     <div className="flex items-center gap-3">
                                                         <div className="w-10 h-10 rounded-full bg-gradient-to-br from-green-500 to-green-600 flex items-center justify-center text-white font-bold">
-                                                            {selectedRequest.assignedEngineer.firstName[0]}
+                                                            {(selectedRequest.assignedEngineer?.firstName || 'U')[0]}
                                                         </div>
                                                         <div>
                                                             <p className="text-sm font-bold text-gray-900">
-                                                                {selectedRequest.assignedEngineer.firstName} {selectedRequest.assignedEngineer.lastName}
+                                                                {selectedRequest.assignedEngineer?.firstName || ''} {selectedRequest.assignedEngineer?.lastName || ''}
                                                             </p>
                                                             <Button variant="link" className="h-auto p-0 text-xs text-blue-600" onClick={(e) => handleAssignClick(e, selectedRequest)}>Change</Button>
                                                         </div>

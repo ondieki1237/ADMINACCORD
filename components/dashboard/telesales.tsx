@@ -115,6 +115,7 @@ export default function TelesalesDashboard() {
   const [filterWeek, setFilterWeek] = useState<number | undefined>()
   const [filterOutcome, setFilterOutcome] = useState<string>("all")
   const [filterDirection, setFilterDirection] = useState<string>("all")
+  const [showAllTelesales, setShowAllTelesales] = useState(false)
   const { toast } = useToast()
   const qc = useQueryClient()
 
@@ -160,7 +161,7 @@ export default function TelesalesDashboard() {
 
   // Fetch call logs
   const { data: callLogsData, isLoading, error, refetch } = useQuery({
-    queryKey: ["callLogs", page, searchQuery, filterYear, filterMonth, filterWeek, filterOutcome, filterDirection],
+    queryKey: ["callLogs", page, searchQuery, filterYear, filterMonth, filterWeek, filterOutcome, filterDirection, showAllTelesales],
     queryFn: async () => {
       const filters: any = {
         page,
@@ -172,6 +173,11 @@ export default function TelesalesDashboard() {
       if (filterWeek) filters.week = filterWeek
       if (filterOutcome && filterOutcome !== 'all') filters.callOutcome = filterOutcome
       if (filterDirection && filterDirection !== 'all') filters.callDirection = filterDirection
+      
+      // Only filter by current user if showAllTelesales is false
+      if (!showAllTelesales && currentUser?._id) {
+        filters.createdBy = currentUser._id
+      }
 
       return apiService.getCallLogs(filters)
     },
@@ -474,6 +480,18 @@ export default function TelesalesDashboard() {
           <p className="text-gray-500 mt-1">Track and manage client calls, follow-ups, and conversions</p>
         </div>
         <div className="flex gap-3">
+          {isAdmin && (
+            <Button 
+              variant={showAllTelesales ? "default" : "outline"}
+              onClick={() => {
+                setShowAllTelesales(!showAllTelesales)
+                setPage(1)
+              }}
+              className={showAllTelesales ? "bg-[#008cf7] hover:bg-[#006bb8] text-white" : "border-[#008cf7] text-[#008cf7] hover:bg-blue-50"}
+            >
+              {showAllTelesales ? "All Telesales" : "My Telesales"}
+            </Button>
+          )}
           <Button variant="outline" onClick={() => refetch()}>
             <RefreshCw className="h-4 w-4 mr-2" />
             Refresh
