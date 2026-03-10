@@ -31,7 +31,9 @@ import {
   ClipboardList,
   History,
   UserCog,
-  Cpu
+  Cpu,
+  ArrowUpDown,
+  Filter
 } from "lucide-react"
 
 export default function MachinesList() {
@@ -44,6 +46,8 @@ export default function MachinesList() {
   const [isBulkAddDialogOpen, setIsBulkAddDialogOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState("")
   const [bulkMachinesText, setBulkMachinesText] = useState("")
+  const [sortBy, setSortBy] = useState<'default' | 'manufacturer' | 'category'>('default')
+  const [filterView, setFilterView] = useState<'all' | 'service-due'>('all')
   
   // Service form state
   const [serviceFormData, setServiceFormData] = useState({
@@ -123,8 +127,32 @@ export default function MachinesList() {
     return []
   }
 
-  const machines = parseMachines()
+  const machinesRaw = parseMachines()
+  
+  // Get total count from API pagination metadata
+  const totalMachines = data?.data?.totalDocs || data?.data?.total || machinesRaw.length
+  
+  // Apply filtering
+  const filteredByServiceDue = filterView === 'service-due' 
+    ? machinesRaw.filter((m: any) => m.nextServiceDue && new Date(m.nextServiceDue) < new Date())
+    : machinesRaw
+  
+  // Apply sorting
+  const machines = [...filteredByServiceDue].sort((a: any, b: any) => {
+    if (sortBy === 'manufacturer') {
+      return (a.manufacturer || '').localeCompare(b.manufacturer || '')
+    } else if (sortBy === 'category') {
+      return (a.category || a.model || '').localeCompare(b.category || b.model || '')
+    }
+    return 0
+  })
+  
   const hasMachines = machines.length > 0
+  
+  // Stats calculations using raw data (all machines on current page)
+  const activeMachines = machinesRaw.filter((m: any) => m.status === 'active').length
+  const maintenanceMachines = machinesRaw.filter((m: any) => m.status === 'maintenance').length
+  const serviceDueMachines = machinesRaw.filter((m: any) => m.nextServiceDue && new Date(m.nextServiceDue) < new Date()).length
 
   // Fetch all users for service assignment
   const { data: usersData, isLoading: usersLoading } = useQuery({
@@ -490,13 +518,12 @@ export default function MachinesList() {
       default: return "bg-gray-100 text-gray-800 border-gray-200"
     }
   }
-
   const getStatusIcon = (status: string) => {
     switch (status) {
       case "active": return <CheckCircle2 className="h-4 w-4" />
       case "maintenance": return <AlertCircle className="h-4 w-4" />
       case "decommissioned": return <XCircle className="h-4 w-4" />
-      default: return <Settings className="h-4 w-4" />
+      default: return <Settings className="h-4 w-4" />;
     }
   }
 
@@ -560,13 +587,44 @@ export default function MachinesList() {
           </div>
 
           {/* Search */}
-          <div className="mt-4">
+          <div className="mt-4 flex flex-col sm:flex-row gap-3">
             <Input
               placeholder="Search by serial number, model, manufacturer, or facility..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="max-w-md"
             />
+            
+            {/* Sort & Filter Buttons */}
+            <div className="flex gap-2 flex-wrap">
+              <Button
+                variant={sortBy === 'manufacturer' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setSortBy(sortBy === 'manufacturer' ? 'default' : 'manufacturer')}
+                className={sortBy === 'manufacturer' ? 'bg-[#008cf7] text-white' : ''}
+              >
+                <ArrowUpDown className="h-4 w-4 mr-1" />
+                By Manufacturer
+              </Button>
+              <Button
+                variant={sortBy === 'category' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setSortBy(sortBy === 'category' ? 'default' : 'category')}
+                className={sortBy === 'category' ? 'bg-[#008cf7] text-white' : ''}
+              >
+                <ArrowUpDown className="h-4 w-4 mr-1" />
+                By Category
+              </Button>
+              <Button
+                variant={filterView === 'service-due' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setFilterView(filterView === 'service-due' ? 'all' : 'service-due')}
+                className={filterView === 'service-due' ? 'bg-orange-500 text-white hover:bg-orange-600' : 'border-orange-300 text-orange-700 hover:bg-orange-50'}
+              >
+                <Filter className="h-4 w-4 mr-1" />
+                Service Due Only
+              </Button>
+            </div>
           </div>
         </div>
 
@@ -577,7 +635,7 @@ export default function MachinesList() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-gray-600 mb-1">Total Machines</p>
-                  <p className="text-2xl font-bold text-gray-900">{machines.length}</p>
+                  <p className="text-2xl font-bold text-gray-900">{totalMachines}</p>
                 </div>
                 <div className="w-12 h-12 rounded-lg bg-blue-100 flex items-center justify-center">
                   <Cog className="h-6 w-6 text-blue-600" />
@@ -592,7 +650,7 @@ export default function MachinesList() {
                 <div>
                   <p className="text-sm text-gray-600 mb-1">Active</p>
                   <p className="text-2xl font-bold text-green-600">
-                    {machines.filter((m: any) => m.status === 'active').length}
+                    {activeMachines}
                   </p>
                 </div>
                 <div className="w-12 h-12 rounded-lg bg-green-100 flex items-center justify-center">
@@ -608,7 +666,7 @@ export default function MachinesList() {
                 <div>
                   <p className="text-sm text-gray-600 mb-1">Maintenance</p>
                   <p className="text-2xl font-bold text-yellow-600">
-                    {machines.filter((m: any) => m.status === 'maintenance').length}
+                    {maintenanceMachines}
                   </p>
                 </div>
                 <div className="w-12 h-12 rounded-lg bg-yellow-100 flex items-center justify-center">
@@ -618,14 +676,18 @@ export default function MachinesList() {
             </CardContent>
           </Card>
 
-          <Card className="bg-white border border-gray-200/60">
+          <Card 
+            className="bg-white border border-gray-200/60 cursor-pointer hover:border-orange-300 transition-colors"
+            onClick={() => setFilterView(filterView === 'service-due' ? 'all' : 'service-due')}
+          >
             <CardContent className="pt-6">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-gray-600 mb-1">Service Due</p>
                   <p className="text-2xl font-bold text-orange-600">
-                    {machines.filter((m: any) => m.nextServiceDue && new Date(m.nextServiceDue) < new Date()).length}
+                    {serviceDueMachines}
                   </p>
+                  <p className="text-xs text-gray-500 mt-1">Click to filter</p>
                 </div>
                 <div className="w-12 h-12 rounded-lg bg-orange-100 flex items-center justify-center">
                   <AlertCircle className="h-6 w-6 text-orange-600" />
@@ -638,9 +700,12 @@ export default function MachinesList() {
         {/* Machines List */}
         <Card className="bg-white border border-gray-200/60">
           <CardHeader className="border-b border-gray-100 pb-4">
-            <CardTitle className="text-lg font-semibold text-gray-900">All Machines</CardTitle>
+            <CardTitle className="text-lg font-semibold text-gray-900">
+              {filterView === 'service-due' ? 'Machines with Service Due' : 'All Machines'}
+              {sortBy !== 'default' && ` (Sorted by ${sortBy})`}
+            </CardTitle>
             <CardDescription className="text-sm text-gray-600">
-              {hasMachines ? `${machines.length} machine${machines.length !== 1 ? 's' : ''} found` : 'No machines available'}
+              {hasMachines ? `${machines.length} machine${machines.length !== 1 ? 's' : ''} ${filterView === 'service-due' ? 'need service' : 'found'}` : 'No machines available'}
             </CardDescription>
           </CardHeader>
           <CardContent className="pt-6">
@@ -767,6 +832,18 @@ export default function MachinesList() {
                     </div>
                   </div>
                 ))}
+                {/* View More Button */}
+                {machines.length > 0 && totalMachines > machines.length && (
+                  <div className="flex justify-center mt-6">
+                    <Button 
+                      size="lg" 
+                      className="bg-[#008cf7] hover:bg-[#006bb8] text-white px-8 py-2 rounded-full"
+                      onClick={() => setPage(page + 1)}
+                    >
+                      View More
+                    </Button>
+                  </div>
+                )}
               </div>
             )}
           </CardContent>
