@@ -792,6 +792,42 @@ class ApiService {
     const queryString = params.toString();
     return this.makeRequest(`/admin/call-logs/statistics${queryString ? `?${queryString}` : ''}`);
   }
+
+  async getTelesalesSummary(filters: {
+    facilityName?: string;
+    startDate?: string;
+    endDate?: string;
+  } = {}): Promise<any> {
+    const params = new URLSearchParams();
+    Object.entries(filters).forEach(([key, value]) => {
+      if (value !== undefined && value !== null && value !== '') {
+        params.append(key, value.toString());
+      }
+    });
+    const queryString = params.toString();
+    return this.makeRequest(`/telesales/summary${queryString ? `?${queryString}` : ''}`);
+  }
+
+  async getTelesalesHistory(filters: {
+    facilityName?: string;
+    page?: number;
+    limit?: number;
+    startDate?: string;
+    endDate?: string;
+    callOutcome?: string;
+    sortBy?: string;
+    sortOrder?: string;
+  } = {}): Promise<any> {
+    const params = new URLSearchParams();
+    Object.entries(filters).forEach(([key, value]) => {
+      if (value !== undefined && value !== null && value !== '') {
+        params.append(key, value.toString());
+      }
+    });
+    const queryString = params.toString();
+    return this.makeRequest(`/admin/telesales/history${queryString ? `?${queryString}` : ''}`);
+  }
+
   async getVisitContactsMapped(visitId: string): Promise<any> {
     return this.makeRequest(`/visits/${encodeURIComponent(visitId)}/contacts-mapped`);
   }

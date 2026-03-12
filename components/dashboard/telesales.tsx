@@ -1,6 +1,7 @@
 "use client"
 
-import React, { useState, useEffect } from "react"
+import React, { useState, useMemo } from "react"
+import Link from "next/link"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { apiService } from "@/lib/api"
 import { authService } from "@/lib/auth"
@@ -15,1211 +16,1315 @@ import { useToast } from "@/hooks/use-toast"
 import {
   Phone,
   Plus,
-  Edit,
-  Trash2,
-  RefreshCw,
-  Search,
-  PhoneIncoming,
-  PhoneOutgoing,
+  ChevronRight,
+  MapPin,
+  User,
   Calendar,
   Clock,
-  TrendingUp,
+  Package,
+  Wrench,
+  Smartphone,
   CheckCircle2,
-  XCircle,
   AlertCircle,
-  PhoneOff,
-  DollarSign,
-  ChevronDown,
-  ChevronRight,
-  ChevronLeft,
-  Filter,
-  Download,
-  Bell,
-  Tag,
-  User,
-  MapPin,
-  FileText
+  ArrowLeft,
+  Search,
+  RefreshCw,
+  History,
 } from "lucide-react"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
 
-interface CallLog {
-  _id: string
-  clientName: string
-  clientFacilityName?: string
-  clientRole?: string
-  clientPhone: string
-  callDirection: 'inbound' | 'outbound'
-  callDate: string
-  callTime: string
-  callDuration: number
-  callOutcome: 'no_answer' | 'interested' | 'follow_up_needed' | 'not_interested' | 'sale_closed'
-  nextAction?: string
-  followUpDate?: string
-  callNotes?: string
-  tags?: string[]
-  year: number
-  month: number
-  week: number
-  createdBy: {
-    _id: string
-    firstName: string
-    lastName: string
+interface Client {
+  id: string
+  facilityName: string
+  location: string
+  machineInstalled: boolean
+  contactPerson?: {
+    name: string
+    role: string
+    phone: string
   }
-  // relatedLead and relatedVisit removed
-  createdAt: string
-  updatedAt: string
+  lastActivity?: {
+    type: 'visit' | 'installation' | 'call' | 'service'
+    date: string
+    description: string
+  }
+  activityHistory: Array<{
+    type: 'visit' | 'installation' | 'call' | 'service'
+    date: string
+    description: string
+  }>
+  source: 'visit' | 'machine' | 'manual'
 }
 
-interface FolderTreeData {
-  year: number
-  totalCalls: number
-  months: {
-    month: number
-    monthName: string
-    totalCalls: number
-    weeks: {
-      week: number
-      count: number
-      firstCall: string
-      lastCall: string
-    }[]
-  }[]
+interface CallRecord {
+  clientId: string
+  callType: 'product_inquiry' | 'service_inquiry' | 'machine_inquiry' | 'follow_up'
+  outcome?: string
+  productInterest?: string
+  expectedPurchaseDate?: string
+  machineModel?: string
+  serviceAccepted?: boolean
+  notes?: string
 }
 
-interface Statistics {
-  totalCalls: number
-  totalDuration: number
-  avgDuration: number
-  inboundCalls: number
-  outboundCalls: number
-  noAnswer: number
-  interested: number
-  followUpNeeded: number
-  notInterested: number
-  saleClosed: number
-  conversionRate: string
-}
-
-export default function TelesalesDashboard() {
-  const [page, setPage] = useState(1)
-  const [searchQuery, setSearchQuery] = useState("")
-  const [selectedCallLog, setSelectedCallLog] = useState<CallLog | null>(null)
-  const [isDialogOpen, setIsDialogOpen] = useState(false)
-  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
-  const [isViewDialogOpen, setIsViewDialogOpen] = useState(false)
-  const [expandedYears, setExpandedYears] = useState<Set<number>>(new Set())
-  const [expandedMonths, setExpandedMonths] = useState<Set<string>>(new Set())
-  const [filterYear, setFilterYear] = useState<number | undefined>()
-  const [filterMonth, setFilterMonth] = useState<number | undefined>()
-  const [filterWeek, setFilterWeek] = useState<number | undefined>()
-  const [filterOutcome, setFilterOutcome] = useState<string>("all")
-  const [filterDirection, setFilterDirection] = useState<string>("all")
-  const [showAllTelesales, setShowAllTelesales] = useState(false)
+export default function TelessalesRevamp() {
   const { toast } = useToast()
   const qc = useQueryClient()
-
   const currentUser = authService.getCurrentUserSync()
   const isAdmin = hasAdminAccess(currentUser)
 
-  // Helper function to calculate ISO week number
-  const getISOWeek = (date: Date): number => {
-    const d = new Date(date)
-    d.setHours(0, 0, 0, 0)
-    d.setDate(d.getDate() + 4 - (d.getDay() || 7))
-    const yearStart = new Date(d.getFullYear(), 0, 1)
-    const weekNo = Math.ceil((((d.getTime() - yearStart.getTime()) / 86400000) + 1) / 7)
-    return weekNo
-  }
+  // ==================== State Management ====================
+  const [selectedClient, setSelectedClient] = useState<Client | null>(null)
+  const [isAddClientDialog, setIsAddClientDialog] = useState(false)
+  const [isCallRecordingDialog, setIsCallRecordingDialog] = useState(false)
+  const [isSummaryDialog, setIsSummaryDialog] = useState(false)
+  const [searchQuery, setSearchQuery] = useState("")
+  const [filterSource, setFilterSource] = useState<'all' | 'machine' | 'visit'>('all')
+  const [summaryData, setSummaryData] = useState<any>(null)
+  const [summaryLoading, setSummaryLoading] = useState(false)
+  const [showMachinesDue, setShowMachinesDue] = useState(false)
+  const [sortMachinesDue, setSortMachinesDue] = useState<'asc' | 'desc'>('desc')
 
-  // Helper function to get year, month, week from date string
-  const getDateComponents = (dateString: string) => {
-    const date = new Date(dateString)
-    return {
-      year: date.getFullYear(),
-      month: date.getMonth() + 1, // JavaScript months are 0-indexed
-      week: getISOWeek(date)
-    }
-  }
-
-  // Form state for both create and edit
-  const [formData, setFormData] = useState({
-    clientName: "",
-    clientFacilityName: "",
-    clientRole: "",
-    clientPhone: "",
-    callDirection: "outbound" as 'inbound' | 'outbound',
-    callDate: new Date().toISOString().split('T')[0],
-    callTime: new Date().toTimeString().slice(0, 5),
-    callDuration: "",
-    callOutcome: "interested" as CallLog['callOutcome'],
-    nextAction: "",
-    followUpDate: "",
-    callNotes: "",
-    tags: "",
+  // Add client form state
+  const [addClientForm, setAddClientForm] = useState({
+    facilityName: "",
+    location: "",
+    contactPersonName: "",
+    contactPersonRole: "",
+    contactPersonPhone: "",
+    machineInstalled: false,
   })
 
-  // Fetch call logs
-  const { data: callLogsData, isLoading, error, refetch } = useQuery({
-    queryKey: ["callLogs", page, searchQuery, filterYear, filterMonth, filterWeek, filterOutcome, filterDirection, showAllTelesales],
+  // Call recording form state
+  const [callRecordingForm, setCallRecordingForm] = useState({
+    callType: "product_inquiry" as 'product_inquiry' | 'service_inquiry' | 'machine_inquiry' | 'follow_up',
+    productInterest: "",
+    expectedPurchaseDate: "",
+    machineModel: "",
+    serviceAccepted: undefined as boolean | undefined,
+    notes: "",
+  })
+
+  // ==================== Data Fetching ====================
+  
+  // Fetch visits
+  const { data: visitsData } = useQuery({
+    queryKey: ["telesales-visits"],
     queryFn: async () => {
-      const filters: any = {
-        page,
-        limit: 20,
-      }
-      if (searchQuery) filters.search = searchQuery
-      if (filterYear) filters.year = filterYear
-      if (filterMonth) filters.month = filterMonth
-      if (filterWeek) filters.week = filterWeek
-      if (filterOutcome && filterOutcome !== 'all') filters.callOutcome = filterOutcome
-      if (filterDirection && filterDirection !== 'all') filters.callDirection = filterDirection
+      const result = await apiService.getVisits(1, 1000)
+      return result
+    },
+    staleTime: 5 * 60 * 1000,
+  })
+
+  // Fetch machines
+  const { data: machinesData } = useQuery({
+    queryKey: ["telesales-machines"],
+    queryFn: async () => {
+      const result = await apiService.getMachines(1, 1000)
+      return result
+    },
+    staleTime: 5 * 60 * 1000,
+  })
+
+  // ==================== Helper Functions ====================
+
+  const aggregateClients = (): Client[] => {
+    const clientMap = new Map<string, Client>()
+
+    // Parse visits and add to client map
+    const visitsDocsArray = visitsData?.data?.docs || []
+    const visitsArray = Array.isArray(visitsDocsArray) ? visitsDocsArray : []
+
+    visitsArray.forEach((visit: any) => {
+      const facilityName = visit.client?.name
+      const location = visit.client?.location
       
-      // Only filter by current user if showAllTelesales is false
-      if (!showAllTelesales && currentUser?._id) {
-        filters.createdBy = currentUser._id
+      if (facilityName) {
+        const key = `${facilityName}-${location || 'unknown'}`
+        
+        if (!clientMap.has(key)) {
+          // Get first contact from contacts array
+          const firstContact = Array.isArray(visit.contacts) && visit.contacts.length > 0 ? visit.contacts[0] : null
+          
+          clientMap.set(key, {
+            id: `visit-${visit._id}`,
+            facilityName,
+            location: location || "Unknown Location",
+            machineInstalled: false,
+            contactPerson: firstContact ? {
+              name: firstContact.name || "Unknown",
+              role: firstContact.role || "Contact",
+              phone: firstContact.phone || "",
+            } : undefined,
+            activityHistory: [],
+            source: 'visit',
+          })
+        }
+
+        const client = clientMap.get(key)!
+        client.activityHistory.push({
+          type: 'visit',
+          date: visit.date || new Date().toISOString(),
+          description: `Visit - ${visit.visitPurpose || 'No purpose specified'}`,
+        })
+      }
+    })
+
+    // Parse machines and add/update in client map
+    // Machines API returns: { data: { docs: [...], totalDocs, etc } }
+    const machinesArray = Array.isArray(machinesData?.data?.docs) ? machinesData.data.docs : []
+
+    machinesArray.forEach((machine: any) => {
+      // Get facility from facility object (not array)
+      const facility = machine.facility
+      const facilityName = facility?.name
+      const location = facility?.location
+      
+      // Get contact from contactPerson (single object, not array)
+      const contact = machine.contactPerson
+      const key = `${facilityName}-${location}`
+      
+      if (facilityName) {
+
+        if (!clientMap.has(key)) {
+          clientMap.set(key, {
+            id: `machine-${machine._id}`,
+            facilityName: facilityName,
+            location: location || "Unknown Location",
+            machineInstalled: true,
+            contactPerson: contact && contact.name ? {
+              name: contact.name || "Unknown",
+              role: contact.role || "Contact",
+              phone: contact.phone || "",
+            } : undefined,
+            activityHistory: [],
+            source: 'machine',
+          })
+        } else {
+          const client = clientMap.get(key)!
+          client.machineInstalled = true
+          if (!client.contactPerson && contact && contact.name) {
+            client.contactPerson = {
+              name: contact.name || "Unknown",
+              role: contact.role || "Contact",
+              phone: contact.phone || "",
+            }
+          }
+        }
+
+        const client = clientMap.get(key)!
+        client.activityHistory.push({
+          type: 'installation',
+          date: machine.installedDate || new Date().toISOString(),
+          description: `Machine Installation - ${machine.model || 'Unknown Model'}`,
+        })
+      }
+    })
+
+    // Set last activity and sort history
+    const clients = Array.from(clientMap.values())
+    clients.forEach((client) => {
+      client.activityHistory.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+      client.lastActivity = client.activityHistory[0]
+    })
+
+    return clients
+  }
+
+  const allClients = useMemo(() => aggregateClients(), [visitsData, machinesData])
+
+  const filteredClients = useMemo(() => {
+    return allClients.filter((client) => {
+      const matchesSearch = 
+        client.facilityName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        client.location.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        client.contactPerson?.name.toLowerCase().includes(searchQuery.toLowerCase())
+      
+      const matchesFilter = filterSource === 'all' || client.source === filterSource
+      
+      return matchesSearch && matchesFilter
+    })
+  }, [allClients, searchQuery, filterSource])
+
+  // ==================== Machines Due for Service ====================
+
+  const machinesDueForService = useMemo(() => {
+    const now = new Date()
+    const oneYearAgo = new Date(now.getFullYear() - 1, now.getMonth(), now.getDate())
+
+    const machinesArray = Array.isArray(machinesData?.data?.docs) ? machinesData.data.docs : []
+
+    const dueList = machinesArray.filter((machine: any) => {
+      // Only include machines that HAVE been serviced and are overdue
+      // Exclude machines with no lastServicedAt
+      if (!machine.lastServicedAt) {
+        return false
       }
 
-      return apiService.getCallLogs(filters)
-    },
-    staleTime: 0,
-    gcTime: 0,
-    refetchOnMount: true,
-    retry: 1,
-  })
-
-  // Fetch folder tree
-  const { data: folderTreeData } = useQuery({
-    queryKey: ["callLogsFolderTree"],
-    queryFn: () => apiService.getCallLogFolderTree(),
-    staleTime: 60000, // Cache for 1 minute
-  })
-
-  // Fetch statistics
-  const { data: statisticsData } = useQuery({
-    queryKey: ["callLogsStatistics", filterYear, filterMonth, filterWeek],
-    queryFn: () => {
-      const filters: any = {}
-      if (filterYear) filters.year = filterYear
-      if (filterMonth) filters.month = filterMonth
-      if (filterWeek) filters.week = filterWeek
-      return apiService.getCallLogStatistics(filters)
-    },
-    staleTime: 60000,
-  })
-
-  // Fetch follow-ups
-  const { data: followUpsData } = useQuery({
-    queryKey: ["callLogsFollowUps"],
-    queryFn: () => apiService.getCallLogFollowUps(7),
-    staleTime: 300000, // Cache for 5 minutes
-  })
-
-  // Create call log mutation
-  const createMutation = useMutation({
-    mutationFn: (newData: any) => apiService.createCallLog(newData),
-    onSuccess: () => {
-      toast({
-        title: "Success",
-        description: "Call log created successfully",
-        variant: "default",
-      })
-      qc.invalidateQueries({ queryKey: ["callLogs"] })
-      qc.invalidateQueries({ queryKey: ["callLogsFolderTree"] })
-      qc.invalidateQueries({ queryKey: ["callLogsStatistics"] })
-      setIsCreateDialogOpen(false)
-      resetForm()
-    },
-    onError: (error: any) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to create call log",
-        variant: "destructive",
-      })
-    },
-  })
-
-  // Update call log mutation
-  const updateMutation = useMutation({
-    mutationFn: (updateData: any) => {
-      const callLogId = selectedCallLog?._id
-      if (!callLogId) throw new Error("Call log ID is required")
-      return apiService.updateCallLog(callLogId, updateData)
-    },
-    onSuccess: () => {
-      toast({
-        title: "Success",
-        description: "Call log updated successfully",
-        variant: "default",
-      })
-      qc.invalidateQueries({ queryKey: ["callLogs"] })
-      qc.invalidateQueries({ queryKey: ["callLogsFolderTree"] })
-      qc.invalidateQueries({ queryKey: ["callLogsStatistics"] })
-      setIsDialogOpen(false)
-      setSelectedCallLog(null)
-      resetForm()
-    },
-    onError: (error: any) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to update call log",
-        variant: "destructive",
-      })
-    },
-  })
-
-  // Delete call log mutation
-  const deleteMutation = useMutation({
-    mutationFn: (callLogId: string) => apiService.deleteCallLog(callLogId),
-    onSuccess: () => {
-      toast({
-        title: "Success",
-        description: "Call log deleted successfully",
-        variant: "default",
-      })
-      qc.invalidateQueries({ queryKey: ["callLogs"] })
-      qc.invalidateQueries({ queryKey: ["callLogsFolderTree"] })
-      qc.invalidateQueries({ queryKey: ["callLogsStatistics"] })
-      setSelectedCallLog(null)
-      setIsViewDialogOpen(false)
-    },
-    onError: (error: any) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to delete call log",
-        variant: "destructive",
-      })
-    },
-  })
-
-  const resetForm = () => {
-    setFormData({
-      clientName: "",
-      clientFacilityName: "",
-      clientRole: "",
-      clientPhone: "",
-      callDirection: "outbound",
-      callDate: new Date().toISOString().split('T')[0],
-      callTime: new Date().toTimeString().slice(0, 5),
-      callDuration: "",
-      callOutcome: "interested",
-      nextAction: "",
-      followUpDate: "",
-      callNotes: "",
-      tags: "",
+      const lastServiced = new Date(machine.lastServicedAt)
+      return lastServiced < oneYearAgo
+    }).map((machine: any) => {
+      const daysOverdue = Math.floor(
+        (new Date().getTime() - new Date(machine.lastServicedAt).getTime()) / 
+        (1000 * 60 * 60 * 24)
+      )
+      return {
+        id: machine._id,
+        facilityName: machine.facility?.name || "Unknown",
+        location: machine.facility?.location || "Unknown",
+        model: machine.model || "Unknown Model",
+        lastServicedAt: machine.lastServicedAt,
+        nextServiceDue: machine.nextServiceDue,
+        contactPerson: machine.contactPerson || {},
+        daysOverdue: daysOverdue,
+      }
     })
-  }
 
-  const handleEdit = (callLog: CallLog) => {
-    setSelectedCallLog(callLog)
-    setFormData({
-      clientName: callLog.clientName,
-      clientFacilityName: callLog.clientFacilityName || "",
-      clientRole: callLog.clientRole || "",
-      clientPhone: callLog.clientPhone,
-      callDirection: callLog.callDirection,
-      callDate: callLog.callDate.split('T')[0],
-      callTime: callLog.callTime,
-      callDuration: callLog.callDuration.toString(),
-      callOutcome: callLog.callOutcome,
-      nextAction: callLog.nextAction || "",
-      followUpDate: callLog.followUpDate ? callLog.followUpDate.split('T')[0] : "",
-      callNotes: callLog.callNotes || "",
-      tags: callLog.tags?.join(", ") || "",
+    // Sort by days overdue
+    return dueList.sort((a: any, b: any) => {
+      return sortMachinesDue === 'desc' 
+        ? b.daysOverdue - a.daysOverdue
+        : a.daysOverdue - b.daysOverdue
     })
-    setIsDialogOpen(true)
-  }
+  }, [machinesData, sortMachinesDue])
 
-  const handleView = (callLog: CallLog) => {
-    setSelectedCallLog(callLog)
-    setIsViewDialogOpen(true)
-  }
+  // ==================== Mutations ====================
 
-  const handleCreateClick = () => {
-    resetForm()
-    setSelectedCallLog(null)
-    setIsCreateDialogOpen(true)
-  }
-
-  const handleSave = async () => {
-    // Validation
-    if (!formData.clientName || !formData.clientFacilityName || !formData.clientRole || !formData.clientPhone || !formData.callDuration) {
+  const addClientMutation = useMutation({
+    mutationFn: async (data: typeof addClientForm) => {
+      // This would typically create a new client in the database
+      // For now, we'll just add it to the local list
+      const newClient: Client = {
+        id: `manual-${Date.now()}`,
+        facilityName: data.facilityName,
+        location: data.location,
+        machineInstalled: data.machineInstalled,
+        contactPerson: {
+          name: data.contactPersonName,
+          role: data.contactPersonRole,
+          phone: data.contactPersonPhone,
+        },
+        activityHistory: [
+          {
+            type: 'call',
+            date: new Date().toISOString(),
+            description: 'Client added to system',
+          }
+        ],
+        source: 'manual',
+      }
+      return newClient
+    },
+    onSuccess: () => {
       toast({
-        title: "Validation Error",
-        description: "Please fill in all required fields",
+        title: "Success",
+        description: "Client added successfully",
+      })
+      setAddClientForm({
+        facilityName: "",
+        location: "",
+        contactPersonName: "",
+        contactPersonRole: "",
+        contactPersonPhone: "",
+        machineInstalled: false,
+      })
+      setIsAddClientDialog(false)
+      qc.invalidateQueries({ queryKey: ["telesales-visits"] })
+      qc.invalidateQueries({ queryKey: ["telesales-machines"] })
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to add client",
         variant: "destructive",
       })
-      return
+    },
+  })
+
+  const recordCallMutation = useMutation({
+    mutationFn: async (data: CallRecord) => {
+      if (!selectedClient) throw new Error("No client selected")
+
+      const now = new Date()
+      const callDate = now.toISOString().split('T')[0]
+      const callTime = now.toTimeString().slice(0, 5)
+
+      // If service inquiry and service accepted, create engineer task
+      if (
+        data.callType === 'service_inquiry' &&
+        data.serviceAccepted
+      ) {
+        // Create service request that will go to engineer reports
+        await apiService.createCallLog({
+          clientName: selectedClient.facilityName,
+          clientPhone: selectedClient.contactPerson?.phone || "",
+          callDirection: 'outbound',
+          callDate,
+          callTime,
+          callDuration: 0,
+          callOutcome: 'interested',
+          year: now.getFullYear(),
+          month: now.getMonth() + 1,
+          week: Math.ceil(now.getDate() / 7),
+          nextAction: `Service request created - ${data.machineModel}`,
+          callNotes: data.notes,
+        })
+
+        // Also create the service request record
+        // This would be a separate API endpoint for service requests
+        console.log("Creating service request for engineer:", {
+          facilityName: selectedClient.facilityName,
+          machineModel: data.machineModel,
+          contactPerson: selectedClient.contactPerson,
+          requestDate: callDate,
+          requestTime: callTime,
+        })
+      } else {
+        // Record regular call log
+        await apiService.createCallLog({
+          clientName: selectedClient.facilityName,
+          clientPhone: selectedClient.contactPerson?.phone || "",
+          callDirection: 'outbound',
+          callDate,
+          callTime,
+          callDuration: 0,
+          callOutcome: 'interested',
+          year: now.getFullYear(),
+          month: now.getMonth() + 1,
+          week: Math.ceil(now.getDate() / 7),
+          nextAction:
+            data.callType === 'product_inquiry'
+              ? `Product inquiry: ${data.productInterest}`
+              : `${data.callType.replace('_', ' ')}`,
+          followUpDate: data.expectedPurchaseDate,
+          callNotes: data.notes,
+        })
+      }
+
+      return true
+    },
+    onSuccess: () => {
+      toast({
+        title: "Success",
+        description: "Call recorded successfully",
+      })
+      
+      if (selectedClient) {
+        selectedClient.activityHistory.unshift({
+          type: 'call',
+          date: new Date().toISOString(),
+          description: `Call recorded - ${callRecordingForm.callType.replace('_', ' ')}`,
+        })
+      }
+
+      setCallRecordingForm({
+        callType: 'product_inquiry',
+        productInterest: "",
+        expectedPurchaseDate: "",
+        machineModel: "",
+        serviceAccepted: undefined,
+        notes: "",
+      })
+      setIsCallRecordingDialog(false)
+      qc.invalidateQueries({ queryKey: ["callLogs"] })
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to record call",
+        variant: "destructive",
+      })
+    },
+  })
+
+  // ==================== Summary Function ====================
+
+  const fetchTelesalesSummary = async () => {
+    try {
+      setSummaryLoading(true)
+      const response = await apiService.getTelesalesSummary()
+      if (response.success) {
+        setSummaryData(response.data)
+      } else {
+        toast({
+          title: "Error",
+          description: "Failed to fetch summary",
+          variant: "destructive",
+        })
+      }
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to fetch summary",
+        variant: "destructive",
+      })
+    } finally {
+      setSummaryLoading(false)
     }
-
-    // Calculate year, month, week from callDate
-    const dateComponents = getDateComponents(formData.callDate)
-
-    const payload = {
-      clientName: formData.clientName,
-      clientFacilityName: formData.clientFacilityName || undefined,
-      clientRole: formData.clientRole || undefined,
-      clientPhone: formData.clientPhone,
-      callDirection: formData.callDirection,
-      callDate: formData.callDate,
-      callTime: formData.callTime,
-      callDuration: parseInt(formData.callDuration),
-      callOutcome: formData.callOutcome,
-      year: dateComponents.year,
-      month: dateComponents.month,
-      week: dateComponents.week,
-      nextAction: formData.nextAction || undefined,
-      followUpDate: formData.followUpDate || undefined,
-      callNotes: formData.callNotes || undefined,
-      tags: formData.tags ? formData.tags.split(",").map(t => t.trim()).filter(Boolean) : undefined,
-    }
-
-    if (selectedCallLog) {
-      updateMutation.mutate(payload)
-    } else {
-      createMutation.mutate(payload)
-    }
   }
 
-  const handleDelete = (callLogId: string) => {
-    if (confirm("Are you sure you want to delete this call log?")) {
-      deleteMutation.mutate(callLogId)
-    }
+  const openSummaryDialog = () => {
+    setIsSummaryDialog(true)
+    fetchTelesalesSummary()
   }
 
-  const toggleYear = (year: number) => {
-    const newSet = new Set(expandedYears)
-    if (newSet.has(year)) {
-      newSet.delete(year)
-    } else {
-      newSet.add(year)
-    }
-    setExpandedYears(newSet)
-  }
+  // ==================== Render Functions ====================
 
-  const toggleMonth = (yearMonth: string) => {
-    const newSet = new Set(expandedMonths)
-    if (newSet.has(yearMonth)) {
-      newSet.delete(yearMonth)
-    } else {
-      newSet.add(yearMonth)
-    }
-    setExpandedMonths(newSet)
-  }
-
-  const handleFolderClick = (year?: number, month?: number, week?: number) => {
-    setFilterYear(year)
-    setFilterMonth(month)
-    setFilterWeek(week)
-    setPage(1)
-  }
-
-  const clearFilters = () => {
-    setFilterYear(undefined)
-    setFilterMonth(undefined)
-    setFilterWeek(undefined)
-    setFilterOutcome("all")
-    setFilterDirection("all")
-    setSearchQuery("")
-    setPage(1)
-  }
-
-  const getOutcomeIcon = (outcome: string) => {
-    switch (outcome) {
-      case 'no_answer': return <PhoneOff className="h-4 w-4" />
-      case 'interested': return <CheckCircle2 className="h-4 w-4" />
-      case 'follow_up_needed': return <AlertCircle className="h-4 w-4" />
-      case 'not_interested': return <XCircle className="h-4 w-4" />
-      case 'sale_closed': return <DollarSign className="h-4 w-4" />
-      default: return <Phone className="h-4 w-4" />
-    }
-  }
-
-  const getOutcomeBadgeVariant = (outcome: string): "default" | "secondary" | "destructive" | "outline" => {
-    switch (outcome) {
-      case 'sale_closed': return 'default'
-      case 'interested': return 'default'
-      case 'follow_up_needed': return 'secondary'
-      case 'not_interested': return 'destructive'
-      case 'no_answer': return 'outline'
-      default: return 'outline'
-    }
-  }
-
-  const getOutcomeColor = (outcome: string) => {
-    switch (outcome) {
-      case 'no_answer': return 'text-gray-600'
-      case 'interested': return 'text-green-600'
-      case 'follow_up_needed': return 'text-yellow-600'
-      case 'not_interested': return 'text-red-600'
-      case 'sale_closed': return 'text-blue-600'
-      default: return 'text-gray-600'
-    }
-  }
-
-  const formatOutcome = (outcome: string) => {
-    return outcome.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')
-  }
-
-  const stats: Statistics | undefined = statisticsData?.data
-
-  const callLogs: CallLog[] = callLogsData?.data || []
-  const pagination = callLogsData?.pagination || { total: 0, page: 1, pages: 1 }
-  const folderTree: FolderTreeData[] = folderTreeData?.data || []
-  const followUps: CallLog[] = followUpsData?.data || []
-  return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-3">
-            <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-red-500 to-red-700 flex items-center justify-center shadow-lg">
-              <Phone className="h-6 w-6 text-white" />
-            </div>
-            Telesales Dashboard
-          </h1>
-          <p className="text-gray-500 mt-1">Track and manage client calls, follow-ups, and conversions</p>
-        </div>
-        <div className="flex gap-3">
-          {isAdmin && (
-            <Button 
-              variant={showAllTelesales ? "default" : "outline"}
-              onClick={() => {
-                setShowAllTelesales(!showAllTelesales)
-                setPage(1)
-              }}
-              className={showAllTelesales ? "bg-[#008cf7] hover:bg-[#006bb8] text-white" : "border-[#008cf7] text-[#008cf7] hover:bg-blue-50"}
-            >
-              {showAllTelesales ? "All Telesales" : "My Telesales"}
-            </Button>
-          )}
-          <Button variant="outline" onClick={() => refetch()}>
-            <RefreshCw className="h-4 w-4 mr-2" />
-            Refresh
-          </Button>
-          <Button onClick={handleCreateClick} className="bg-red-600 hover:bg-red-700">
-            <Plus className="h-4 w-4 mr-2" />
-            Log Call
+  const renderClientList = () => (
+    <div className="space-y-3">
+      {filteredClients.length === 0 ? (
+        <div className="col-span-full text-center py-12">
+          <AlertCircle className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
+          <p className="text-muted-foreground">No clients found</p>
+          <Button
+            variant="outline"
+            size="sm"
+            className="mt-4"
+            onClick={() => setIsAddClientDialog(true)}
+          >
+            <Plus className="mr-2 h-4 w-4" />
+            Add New Client
           </Button>
         </div>
-      </div>
-
-      {/* Statistics Cards */}
-      {stats && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          <Card className="border-l-4 border-l-blue-500">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium text-gray-600">Total Calls</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-3xl font-bold text-gray-900">{stats.totalCalls}</p>
-                  <p className="text-xs text-gray-500 mt-1">
-                    {stats.inboundCalls} in / {stats.outboundCalls} out
-                  </p>
-                </div>
-                <Phone className="h-8 w-8 text-blue-500" />
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="border-l-4 border-l-green-500">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium text-gray-600">Conversion Rate</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-3xl font-bold text-gray-900">{stats.conversionRate}%</p>
-                  <p className="text-xs text-gray-500 mt-1">
-                    {stats.saleClosed} sales closed
-                  </p>
-                </div>
-                <TrendingUp className="h-8 w-8 text-green-500" />
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="border-l-4 border-l-purple-500">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium text-gray-600">Avg Duration</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-3xl font-bold text-gray-900">{stats.avgDuration} min</p>
-                  <p className="text-xs text-gray-500 mt-1">
-                    {stats.totalDuration} min total
-                  </p>
-                </div>
-                <Clock className="h-8 w-8 text-purple-500" />
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="border-l-4 border-l-yellow-500">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium text-gray-600">Follow-ups</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-3xl font-bold text-gray-900">{stats.followUpNeeded}</p>
-                  <p className="text-xs text-gray-500 mt-1">
-                    {followUps.length} upcoming
-                  </p>
-                </div>
-                <Bell className="h-8 w-8 text-yellow-500" />
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      )}
-
-      {/* Main Content */}
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-        {/* Folder Tree Sidebar */}
-        <Card className="lg:col-span-1">
-          <CardHeader>
-            <CardTitle className="text-lg flex items-center gap-2">
-              <Calendar className="h-5 w-5 text-red-600" />
-              Call History
-            </CardTitle>
-            <CardDescription>Browse by date</CardDescription>
-          </CardHeader>
-          <CardContent className="max-h-[600px] overflow-y-auto">
-            {filterYear || filterMonth || filterWeek ? (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={clearFilters}
-                className="w-full mb-3 text-red-600 hover:text-red-700 hover:bg-red-50"
-              >
-                <XCircle className="h-4 w-4 mr-2" />
-                Clear Filters
-              </Button>
-            ) : null}
-            
-            <div className="space-y-2">
-              {folderTree.map((yearData) => (
-                <div key={yearData.year}>
-                  <button
-                    onClick={() => toggleYear(yearData.year)}
-                    className={`w-full flex items-center gap-2 p-2 rounded-lg hover:bg-gray-50 transition-colors ${
-                      filterYear === yearData.year && !filterMonth ? 'bg-red-50 text-red-600' : ''
-                    }`}
-                  >
-                    {expandedYears.has(yearData.year) ? (
-                      <ChevronDown className="h-4 w-4" />
-                    ) : (
-                      <ChevronRight className="h-4 w-4" />
-                    )}
-                    <Calendar className="h-4 w-4" />
-                    <span className="font-semibold">{yearData.year}</span>
-                    <Badge variant="secondary" className="ml-auto">
-                      {yearData.totalCalls}
+      ) : (
+        filteredClients.map((client) => (
+          <Card
+            key={client.id}
+            className="cursor-pointer hover:shadow-md transition-shadow"
+            onClick={() => setSelectedClient(client)}
+          >
+            <CardContent className="pt-6">
+              <div className="flex justify-between items-start">
+                <div className="flex-1">
+                  <div className="flex items-center gap-2 mb-2">
+                    <h3 className="font-semibold text-lg">{client.facilityName}</h3>
+                    <Badge 
+                      variant="outline" 
+                      className={
+                        client.source === 'machine' ? 'bg-green-100 text-green-800 border-green-300' :
+                        client.source === 'visit' ? 'bg-purple-100 text-purple-800 border-purple-300' :
+                        'bg-blue-100 text-blue-800 border-blue-300'
+                      }
+                    >
+                      {client.source === 'machine' ? 'Machine' : client.source === 'visit' ? 'Visit' : 'Manual'}
                     </Badge>
-                  </button>
-
-                  {expandedYears.has(yearData.year) && (
-                    <div className="ml-6 mt-1 space-y-1">
-                      {yearData.months.map((monthData) => {
-                        const yearMonth = `${yearData.year}-${monthData.month}`
-                        return (
-                          <div key={yearMonth}>
-                            <button
-                              onClick={() => toggleMonth(yearMonth)}
-                              className={`w-full flex items-center gap-2 p-2 rounded-lg hover:bg-gray-50 transition-colors text-sm ${
-                                filterYear === yearData.year && filterMonth === monthData.month && !filterWeek
-                                  ? 'bg-red-50 text-red-600'
-                                  : ''
-                              }`}
-                            >
-                              {expandedMonths.has(yearMonth) ? (
-                                <ChevronDown className="h-3 w-3" />
-                              ) : (
-                                <ChevronRight className="h-3 w-3" />
-                              )}
-                              <span className="font-medium">{monthData.monthName}</span>
-                              <Badge variant="outline" className="ml-auto text-xs">
-                                {monthData.totalCalls}
-                              </Badge>
-                            </button>
-
-                            {expandedMonths.has(yearMonth) && (
-                              <div className="ml-6 mt-1 space-y-1">
-                                {monthData.weeks.map((weekData) => (
-                                  <button
-                                    key={weekData.week}
-                                    onClick={() => handleFolderClick(yearData.year, monthData.month, weekData.week)}
-                                    className={`w-full flex items-center gap-2 p-1.5 rounded-lg hover:bg-gray-50 transition-colors text-xs ${
-                                      filterYear === yearData.year &&
-                                      filterMonth === monthData.month &&
-                                      filterWeek === weekData.week
-                                        ? 'bg-red-50 text-red-600 font-medium'
-                                        : ''
-                                    }`}
-                                  >
-                                    <span>Week {weekData.week}</span>
-                                    <Badge variant="secondary" className="ml-auto text-xs">
-                                      {weekData.count}
-                                    </Badge>
-                                  </button>
-                                ))}
-                              </div>
-                            )}
-                          </div>
-                        )
-                      })}
+                  </div>
+                  <div className="space-y-1 text-sm text-muted-foreground">
+                    <div className="flex items-center gap-2">
+                      <MapPin className="h-4 w-4" />
+                      {client.location}
                     </div>
-                  )}
+                    {client.contactPerson && (
+                      <div className="flex items-center gap-2">
+                        <User className="h-4 w-4" />
+                        {client.contactPerson.name} ({client.contactPerson.role})
+                      </div>
+                    )}
+                    {client.lastActivity && (
+                      <div className="flex items-center gap-2 mt-3">
+                        <Calendar className="h-4 w-4" />
+                        Last Activity: {client.lastActivity.description} •{" "}
+                        {new Date(client.lastActivity.date).toLocaleDateString()}
+                      </div>
+                    )}
+                  </div>
                 </div>
-              ))}
+                <div className="flex flex-col gap-2">
+                  {client.machineInstalled && (
+                    <Badge variant="secondary" className="bg-green-100 text-green-800">
+                      Machine Installed
+                    </Badge>
+                  )}
+                  <ChevronRight className="h-5 w-5 text-muted-foreground" />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        ))
+      )}
+    </div>
+  )
+
+  const renderClientDetails = () => {
+    if (!selectedClient) return null
+
+    return (
+      <div className="space-y-6">
+        {/* Header */}
+        <div className="flex items-center justify-between">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setSelectedClient(null)}
+            className="mb-4"
+          >
+            <ArrowLeft className="mr-2 h-4 w-4" />
+            Back to Clients
+          </Button>
+        </div>
+
+        {/* Facility Details Card */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-2xl">{selectedClient.facilityName}</CardTitle>
+            <CardDescription>{selectedClient.location}</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label className="text-xs font-semibold text-muted-foreground">CONTACT PERSON</Label>
+                <p className="mt-1 font-medium">
+                  {selectedClient.contactPerson?.name || "Not specified"}
+                </p>
+              </div>
+              <div>
+                <Label className="text-xs font-semibold text-muted-foreground">ROLE</Label>
+                <p className="mt-1 font-medium">
+                  {selectedClient.contactPerson?.role || "Not specified"}
+                </p>
+              </div>
+              <div>
+                <Label className="text-xs font-semibold text-muted-foreground">PHONE</Label>
+                <p className="mt-1 font-medium flex items-center gap-2">
+                  {selectedClient.contactPerson?.phone || "Not specified"}
+                  {selectedClient.contactPerson?.phone && (
+                    <Phone className="h-4 w-4 text-blue-600" />
+                  )}
+                </p>
+              </div>
+              <div>
+                <Label className="text-xs font-semibold text-muted-foreground">MACHINE STATUS</Label>
+                <Badge className={selectedClient.machineInstalled ? "bg-green-100 text-green-800 mt-1" : "bg-gray-100 text-gray-800 mt-1"}>
+                  {selectedClient.machineInstalled ? "Installed" : "Not Installed"}
+                </Badge>
+              </div>
             </div>
           </CardContent>
         </Card>
 
-        {/* Call Logs List */}
-        <div className="lg:col-span-3 space-y-4">
-          {/* Search and Filters */}
-          <Card>
-            <CardContent className="pt-6">
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-                <div className="md:col-span-2">
-                  <div className="relative">
-                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-                    <Input
-                      placeholder="Search client name or notes..."
-                      value={searchQuery}
-                      onChange={(e) => {
-                        setSearchQuery(e.target.value)
-                        setPage(1)
-                      }}
-                      className="pl-10"
-                    />
-                  </div>
-                </div>
+        {/* Action Buttons */}
+        <div className="grid grid-cols-2 gap-3">
+          <Button
+            onClick={() => setIsCallRecordingDialog(true)}
+            className="w-full bg-blue-600 hover:bg-blue-700"
+          >
+            <Phone className="mr-2 h-4 w-4" />
+            Record Call
+          </Button>
+          <Button
+            variant="outline"
+            className="w-full"
+            onClick={() => {
+              if (selectedClient.contactPerson?.phone) {
+                window.location.href = `tel:${selectedClient.contactPerson.phone}`
+              } else {
+                toast({
+                  title: "No phone number",
+                  description: "Contact person has no phone number registered",
+                  variant: "destructive",
+                })
+              }
+            }}
+          >
+            <Smartphone className="mr-2 h-4 w-4" />
+            Call Now
+          </Button>
+        </div>
 
-                <Select value={filterOutcome} onValueChange={(value) => {
-                  setFilterOutcome(value)
-                  setPage(1)
-                }}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Filter by outcome" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Outcomes</SelectItem>
-                    <SelectItem value="no_answer">No Answer</SelectItem>
-                    <SelectItem value="interested">Interested</SelectItem>
-                    <SelectItem value="follow_up_needed">Follow-up Needed</SelectItem>
-                    <SelectItem value="not_interested">Not Interested</SelectItem>
-                    <SelectItem value="sale_closed">Sale Closed</SelectItem>
-                  </SelectContent>
-                </Select>
-
-                <Select value={filterDirection} onValueChange={(value) => {
-                  setFilterDirection(value)
-                  setPage(1)
-                }}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Filter by direction" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Calls</SelectItem>
-                    <SelectItem value="inbound">Inbound</SelectItem>
-                    <SelectItem value="outbound">Outbound</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Call Logs */}
-          {isLoading ? (
-            <Card>
-              <CardContent className="p-12 text-center">
-                <RefreshCw className="h-8 w-8 animate-spin mx-auto text-gray-400" />
-                <p className="text-gray-500 mt-4">Loading call logs...</p>
-              </CardContent>
-            </Card>
-          ) : callLogs.length === 0 ? (
-            <Card>
-              <CardContent className="p-12 text-center">
-                <Phone className="h-12 w-12 mx-auto text-gray-400" />
-                <h3 className="text-lg font-semibold text-gray-900 mt-4">No call logs found</h3>
-                <p className="text-gray-500 mt-2">Start by logging your first call</p>
-                <Button onClick={handleCreateClick} className="mt-4 bg-red-600 hover:bg-red-700">
-                  <Plus className="h-4 w-4 mr-2" />
-                  Log First Call
-                </Button>
-              </CardContent>
-            </Card>
-          ) : (
-            <div className="space-y-3">
-              {callLogs.map((callLog) => (
-                <Card
-                  key={callLog._id}
-                  className="hover:shadow-md transition-shadow cursor-pointer"
-                  onClick={() => handleView(callLog)}
-                >
-                  <CardContent className="p-4">
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-3 mb-2">
-                          <div className={`p-2 rounded-lg ${
-                            callLog.callDirection === 'inbound' ? 'bg-blue-50' : 'bg-green-50'
-                          }`}>
-                            {callLog.callDirection === 'inbound' ? (
-                              <PhoneIncoming className={`h-5 w-5 ${
-                                callLog.callDirection === 'inbound' ? 'text-blue-600' : 'text-green-600'
-                              }`} />
-                            ) : (
-                              <PhoneOutgoing className="h-5 w-5 text-green-600" />
-                            )}
-                          </div>
-                          <div className="flex-1">
-                            <h3 className="font-semibold text-gray-900">{callLog.clientName}</h3>
-                            <p className="text-sm text-gray-500">{callLog.clientPhone}</p>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <Badge variant={getOutcomeBadgeVariant(callLog.callOutcome)} className="capitalize">
-                              {formatOutcome(callLog.callOutcome)}
-                            </Badge>
-                          </div>
-                        </div>
-
-                        <div className="flex items-center gap-4 text-sm text-gray-600 mt-3">
-                          <div className="flex items-center gap-1">
-                            <Calendar className="h-4 w-4" />
-                            <span>{new Date(callLog.callDate).toLocaleDateString()}</span>
-                          </div>
-                          <div className="flex items-center gap-1">
-                            <Clock className="h-4 w-4" />
-                            <span>{callLog.callTime} ({callLog.callDuration} min)</span>
-                          </div>
-                          <div className="flex items-center gap-1">
-                            <User className="h-4 w-4" />
-                            <span>{callLog.createdBy.firstName} {callLog.createdBy.lastName}</span>
-                          </div>
-                        </div>
-
-                        {callLog.callNotes && (
-                          <p className="text-sm text-gray-600 mt-2 line-clamp-2">
-                            {callLog.callNotes}
-                          </p>
-                        )}
-
-                        {callLog.tags && callLog.tags.length > 0 && (
-                          <div className="flex gap-2 mt-2">
-                            {callLog.tags.map((tag, idx) => (
-                              <Badge key={idx} variant="outline" className="text-xs">
-                                <Tag className="h-3 w-3 mr-1" />
-                                {tag}
-                              </Badge>
-                            ))}
-                          </div>
-                        )}
-
-                        {callLog.followUpDate && (
-                          <div className="flex items-center gap-2 mt-2 text-sm text-yellow-600 bg-yellow-50 px-2 py-1 rounded inline-flex">
-                            <Bell className="h-4 w-4" />
-                            <span>Follow-up: {new Date(callLog.followUpDate).toLocaleDateString()}</span>
-                          </div>
-                        )}
+        {/* Recent Activity Timeline */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Recent Activity</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {selectedClient.activityHistory.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No activity recorded yet</p>
+            ) : (
+              <div className="space-y-4">
+                {selectedClient.activityHistory.map((activity, idx) => (
+                  <div key={idx} className="flex gap-4">
+                    <div className="flex flex-col items-center">
+                      <div className="rounded-full bg-blue-100 p-2">
+                        {activity.type === 'visit' && <MapPin className="h-4 w-4 text-blue-600" />}
+                        {activity.type === 'installation' && <Package className="h-4 w-4 text-green-600" />}
+                        {activity.type === 'call' && <Phone className="h-4 w-4 text-purple-600" />}
+                        {activity.type === 'service' && <Wrench className="h-4 w-4 text-orange-600" />}
                       </div>
-
-                      <div className="flex gap-2 ml-4">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            handleEdit(callLog)
-                          }}
-                        >
-                          <Edit className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            handleDelete(callLog._id)
-                          }}
-                        >
-                          <Trash2 className="h-4 w-4 text-red-600" />
-                        </Button>
-                      </div>
+                      {idx < selectedClient.activityHistory.length - 1 && (
+                        <div className="w-0.5 h-8 bg-gray-200 mt-2" />
+                      )}
                     </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          )}
-
-          {/* Pagination */}
-          {pagination.pages > 1 && (
-            <Card>
-              <CardContent className="p-4">
-                <div className="flex items-center justify-between">
-                  <p className="text-sm text-gray-600">
-                    Showing page {pagination.page} of {pagination.pages} ({pagination.total} total)
-                  </p>
-                  <div className="flex gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setPage(page - 1)}
-                      disabled={page === 1}
-                    >
-                      <ChevronLeft className="h-4 w-4" />
-                      Previous
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setPage(page + 1)}
-                      disabled={page === pagination.pages}
-                    >
-                      Next
-                      <ChevronRight className="h-4 w-4" />
-                    </Button>
+                    <div className="py-2">
+                      <p className="font-medium">{activity.description}</p>
+                      <p className="text-sm text-muted-foreground">
+                        {new Date(activity.date).toLocaleString()}
+                      </p>
+                    </div>
                   </div>
-                </div>
-              </CardContent>
-            </Card>
-          )}
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
+  // ==================== Main Render ====================
+
+  if (!isAdmin) {
+    return (
+      <Card className="border-red-200 bg-red-50">
+        <CardContent className="pt-6">
+          <p className="text-red-800">You don't have permission to access the Telesales module.</p>
+        </CardContent>
+      </Card>
+    )
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex justify-between items-center">
+        <div>
+          <h1 className="text-3xl font-bold">Telesales Management</h1>
+          <p className="text-muted-foreground">Manage facilities, contacts, and sales interactions</p>
+        </div>
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              qc.invalidateQueries({ queryKey: ["telesales-visits"] })
+              qc.invalidateQueries({ queryKey: ["telesales-machines"] })
+            }}
+          >
+            <RefreshCw className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={openSummaryDialog}
+          >
+            Summary
+          </Button>
+          <Link href="/dashboard/telesales/history">
+            <Button
+              variant="outline"
+              size="sm"
+            >
+              <History className="h-4 w-4 mr-2" />
+              Call History
+            </Button>
+          </Link>
+          <Button
+            onClick={() => setIsAddClientDialog(true)}
+            className="bg-blue-600 hover:bg-blue-700"
+          >
+            <Plus className="mr-2 h-4 w-4" />
+            Add New Client
+          </Button>
         </div>
       </div>
 
-      {/* Create/Edit Dialog */}
-      <Dialog open={isCreateDialogOpen || isDialogOpen} onOpenChange={(open) => {
-        if (!open) {
-          setIsCreateDialogOpen(false)
-          setIsDialogOpen(false)
-          resetForm()
-        }
-      }}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>
-              {selectedCallLog ? "Edit Call Log" : "Log New Call"}
-            </DialogTitle>
-          </DialogHeader>
+      {/* Debug Info - Remove in Production */}
+      {allClients.length === 0 && (
+        <Card className="bg-yellow-50 border-yellow-200">
+          <CardContent className="pt-6">
+            <div className="space-y-3 text-sm font-mono">
+              <p><strong>Debug Info:</strong></p>
+              <p>Visits loaded: {visitsData ? '✓' : '✗'}</p>
+              <p>Machines loaded: {machinesData ? '✓' : '✗'}</p>
+              <p className="mt-3"><strong>Machines Count:</strong> {Array.isArray(machinesData?.data?.docs) ? machinesData.data.docs.length : '0'}</p>
+              <p><strong>Visits Count:</strong> {Array.isArray(visitsData?.data?.docs) ? visitsData.data.docs.length : '0'}</p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
-          <div className="grid grid-cols-2 gap-4">
-            <div className="col-span-2">
-              <Label htmlFor="clientName">Client Name *</Label>
-              <Input
-                id="clientName"
-                value={formData.clientName}
-                onChange={(e) => setFormData({ ...formData, clientName: e.target.value })}
-                placeholder="Dr. John Smith"
-              />
-            </div>
-
-            <div className="col-span-2">
-              <Label htmlFor="clientPhone">Client Phone *</Label>
-              <Input
-                id="clientPhone"
-                value={formData.clientPhone}
-                onChange={(e) => setFormData({ ...formData, clientPhone: e.target.value })}
-                placeholder="+254712345678"
-              />
-            </div>
-
-            
-              <Label htmlFor="callDirection">Call Direction *</Label>
-              <Select
-                value={formData.callDirection}
-                onValueChange={(value: 'inbound' | 'outbound') =>
-                  setFormData({ ...formData, callDirection: value })
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="inbound">
-                    <div className="flex items-center gap-2">
-                      <PhoneIncoming className="h-4 w-4" />
-                      Inbound
-                    </div>
-                  </SelectItem>
-                  <SelectItem value="outbound">
-                    <div className="flex items-center gap-2">
-                      <PhoneOutgoing className="h-4 w-4" />
-                      Outbound
-                    </div>
-                  </SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div>
-              <Label htmlFor="callOutcome">Call Outcome *</Label>
-              <Select
-                value={formData.callOutcome}
-                onValueChange={(value: CallLog['callOutcome']) =>
-                  setFormData({ ...formData, callOutcome: value })
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="no_answer">No Answer</SelectItem>
-                  <SelectItem value="interested">Interested</SelectItem>
-                  <SelectItem value="follow_up_needed">Follow-up Needed</SelectItem>
-                  <SelectItem value="not_interested">Not Interested</SelectItem>
-                  <SelectItem value="sale_closed">Sale Closed</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div>
-              <Label htmlFor="callDate">Call Date *</Label>
-              <Input
-                id="callDate"
-                type="date"
-                value={formData.callDate}
-                onChange={(e) => setFormData({ ...formData, callDate: e.target.value })}
-              />
-            </div>
-
-            <div>
-              <Label htmlFor="callTime">Call Time *</Label>
-              <Input
-                id="callTime"
-                type="time"
-                value={formData.callTime}
-                onChange={(e) => setFormData({ ...formData, callTime: e.target.value })}
-              />
-            </div>
-
-            <div className="col-span-2">
-              <Label htmlFor="callDuration">Duration (minutes) *</Label>
-              <Input
-                id="callDuration"
-                type="number"
-                min="0"
-                value={formData.callDuration}
-                onChange={(e) => setFormData({ ...formData, callDuration: e.target.value })}
-                placeholder="15"
-              />
-            </div>
-
-            <div className="col-span-2">
-              <Label htmlFor="nextAction">Next Action</Label>
-              <Input
-                id="nextAction"
-                value={formData.nextAction}
-                onChange={(e) => setFormData({ ...formData, nextAction: e.target.value })}
-                placeholder="Send product brochure"
-              />
-            </div>
-
-            <div className="col-span-2">
-              <Label htmlFor="followUpDate">Follow-up Date</Label>
-              <Input
-                id="followUpDate"
-                type="date"
-                value={formData.followUpDate}
-                onChange={(e) => setFormData({ ...formData, followUpDate: e.target.value })}
-              />
-            </div>
-
-            <div className="col-span-2">
-              <Label htmlFor="callNotes">Call Notes</Label>
-              <Textarea
-                id="callNotes"
-                value={formData.callNotes}
-                onChange={(e) => setFormData({ ...formData, callNotes: e.target.value })}
-                placeholder="Detailed notes about the call..."
-                rows={4}
-              />
-            </div>
-
-            <div className="col-span-2">
-              <Label htmlFor="tags">Tags (comma-separated)</Label>
-              <Input
-                id="tags"
-                value={formData.tags}
-                onChange={(e) => setFormData({ ...formData, tags: e.target.value })}
-                placeholder="high-priority, x-ray, urgent"
-              />
-            </div>
-            <div>
-              <Label htmlFor="clientFacilityName">Client Facility Name *</Label>
-              <Input
-                id="clientFacilityName"
-                value={formData.clientFacilityName}
-                onChange={(e) => setFormData({ ...formData, clientFacilityName: e.target.value })}
-                placeholder="City Hospital"
-              />
-            </div>
-            <div>
-              <Label htmlFor="clientRole">Client Role *</Label>
-              <Input
-                id="clientRole"
-                value={formData.clientRole}
-                onChange={(e) => setFormData({ ...formData, clientRole: e.target.value })}
-                placeholder="Radiologist, Procurement, etc."
-              />
-            </div>
-            <div>
-
+      {/* Main Content */}
+      {selectedClient ? (
+        renderClientDetails()
+      ) : (
+        <>
+          {/* Search Bar */}
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Search by facility name, location, or contact..."
+              className="pl-10"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
           </div>
 
+          {/* Filter Buttons */}
+          <div className="flex gap-2">
+            <Button
+              variant={filterSource === 'all' ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => setFilterSource('all')}
+              className={filterSource === 'all' ? 'bg-blue-600' : ''}
+            >
+              All Clients ({allClients.length})
+            </Button>
+            <Button
+              variant={filterSource === 'machine' ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => setFilterSource('machine')}
+              className={filterSource === 'machine' ? 'bg-green-600' : ''}
+            >
+              Machines ({allClients.filter(c => c.source === 'machine').length})
+            </Button>
+            <Button
+              variant={filterSource === 'visit' ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => setFilterSource('visit')}
+              className={filterSource === 'visit' ? 'bg-purple-600' : ''}
+            >
+              Visits ({allClients.filter(c => c.source === 'visit').length})
+            </Button>
+          </div>
+
+          {/* Machines Due for Service */}
+          {machinesDueForService.length > 0 && showMachinesDue && (
+            <Card className="border-orange-200 bg-orange-50">
+              <CardHeader>
+                <div className="flex justify-between items-start">
+                  <div className="flex-1">
+                    <CardTitle className="text-lg text-orange-900">
+                      Machines Due for Service ({machinesDueForService.length})
+                    </CardTitle>
+                    <p className="text-sm text-orange-800 mt-2">
+                      These machines have not been serviced in the last year
+                    </p>
+                  </div>
+                  <div className="flex gap-2 items-start">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setSortMachinesDue(sortMachinesDue === 'desc' ? 'asc' : 'desc')}
+                      className="text-xs"
+                    >
+                      Sort: {sortMachinesDue === 'desc' ? 'Most' : 'Least'} Overdue
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setShowMachinesDue(false)}
+                      className="text-orange-700 hover:bg-orange-200"
+                    >
+                      Hide
+                    </Button>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {machinesDueForService.map((machine: any) => (
+                  <Card 
+                    key={machine.id}
+                    className="border-orange-200 cursor-pointer hover:shadow-md hover:bg-orange-100 transition-all"
+                    onClick={() => {
+                      // Find the matching client from allClients
+                      const matchingClient = allClients.find(
+                        c => c.facilityName === machine.facilityName && c.location === machine.location
+                      )
+                      if (matchingClient) {
+                        setSelectedClient(matchingClient)
+                      }
+                    }}
+                  >
+                    <CardContent className="pt-4">
+                      <div className="flex justify-between items-start gap-4">
+                        <div className="flex-1">
+                          <h4 className="font-semibold text-sm">{machine.facilityName}</h4>
+                          <p className="text-xs text-muted-foreground mb-2">{machine.model}</p>
+                          <div className="space-y-1 text-xs text-muted-foreground">
+                            <div className="flex items-center gap-2">
+                              <MapPin className="h-3 w-3" />
+                              {machine.location}
+                            </div>
+                            {machine.contactPerson?.name && (
+                              <div className="flex items-center gap-2">
+                                <User className="h-3 w-3" />
+                                {machine.contactPerson.name}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <Badge className="bg-red-100 text-red-800 mb-2">
+                            {machine.daysOverdue === -1 
+                              ? 'Never Serviced' 
+                              : `${machine.daysOverdue} days overdue`
+                            }
+                          </Badge>
+                          {machine.lastServicedAt && (
+                            <p className="text-xs text-muted-foreground">
+                              Last: {new Date(machine.lastServicedAt).toLocaleDateString()}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </CardContent>
+            </Card>
+          )}
+          
+          {machinesDueForService.length > 0 && !showMachinesDue && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowMachinesDue(true)}
+              className="w-full border-orange-200 text-orange-700 hover:bg-orange-50"
+            >
+              Show Machines Due for Service ({machinesDueForService.length})
+            </Button>
+          )}
+
+          {/* Client List */}
+          <div>
+            <h2 className="text-lg font-semibold mb-4">
+              Clients ({filteredClients.length})
+            </h2>
+            {renderClientList()}
+          </div>
+        </>
+      )}
+
+      {/* Add Client Dialog */}
+      <Dialog open={isAddClientDialog} onOpenChange={setIsAddClientDialog}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Add New Client</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="facility-name">Facility Name *</Label>
+              <Input
+                id="facility-name"
+                placeholder="e.g., Aga Khan Hospital"
+                value={addClientForm.facilityName}
+                onChange={(e) =>
+                  setAddClientForm({ ...addClientForm, facilityName: e.target.value })
+                }
+              />
+            </div>
+            <div>
+              <Label htmlFor="location">Location *</Label>
+              <Input
+                id="location"
+                placeholder="e.g., Nairobi, Kenya"
+                value={addClientForm.location}
+                onChange={(e) =>
+                  setAddClientForm({ ...addClientForm, location: e.target.value })
+                }
+              />
+            </div>
+            <div>
+              <Label htmlFor="contact-name">Contact Person Name *</Label>
+              <Input
+                id="contact-name"
+                placeholder="Full name"
+                value={addClientForm.contactPersonName}
+                onChange={(e) =>
+                  setAddClientForm({
+                    ...addClientForm,
+                    contactPersonName: e.target.value,
+                  })
+                }
+              />
+            </div>
+            <div>
+              <Label htmlFor="contact-role">Contact Role *</Label>
+              <Input
+                id="contact-role"
+                placeholder="e.g., Facilities Manager"
+                value={addClientForm.contactPersonRole}
+                onChange={(e) =>
+                  setAddClientForm({
+                    ...addClientForm,
+                    contactPersonRole: e.target.value,
+                  })
+                }
+              />
+            </div>
+            <div>
+              <Label htmlFor="contact-phone">Contact Phone *</Label>
+              <Input
+                id="contact-phone"
+                placeholder="Phone number"
+                value={addClientForm.contactPersonPhone}
+                onChange={(e) =>
+                  setAddClientForm({
+                    ...addClientForm,
+                    contactPersonPhone: e.target.value,
+                  })
+                }
+              />
+            </div>
+            <div>
+              <Label className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={addClientForm.machineInstalled}
+                  onChange={(e) =>
+                    setAddClientForm({
+                      ...addClientForm,
+                      machineInstalled: e.target.checked,
+                    })
+                  }
+                />
+                Machine Installed at this facility
+              </Label>
+            </div>
+          </div>
           <DialogFooter>
             <Button
               variant="outline"
-              onClick={() => {
-                setIsCreateDialogOpen(false)
-                setIsDialogOpen(false)
-                resetForm()
-              }}
+              onClick={() => setIsAddClientDialog(false)}
             >
               Cancel
             </Button>
             <Button
-              onClick={handleSave}
-              disabled={createMutation.isPending || updateMutation.isPending}
-              className="bg-red-600 hover:bg-red-700"
+              onClick={() =>
+                addClientMutation.mutate(addClientForm)
+              }
+              disabled={
+                !addClientForm.facilityName ||
+                !addClientForm.location ||
+                !addClientForm.contactPersonName ||
+                !addClientForm.contactPersonRole ||
+                !addClientForm.contactPersonPhone
+              }
             >
-              {createMutation.isPending || updateMutation.isPending ? (
-                <>
-                  <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                  Saving...
-                </>
-              ) : (
-                <>Save Call Log</>
-              )}
+              Add Client
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* View Dialog */}
-      <Dialog open={isViewDialogOpen} onOpenChange={setIsViewDialogOpen}>
-        <DialogContent className="max-w-2xl">
+      {/* Call Recording Dialog */}
+      <Dialog open={isCallRecordingDialog} onOpenChange={setIsCallRecordingDialog}>
+        <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Call Log Details</DialogTitle>
+            <DialogTitle>Record Call - {selectedClient?.facilityName}</DialogTitle>
           </DialogHeader>
+          <div className="space-y-4">
+            {/* Call Type Selection */}
+            <div>
+              <Label htmlFor="call-type">Call Type *</Label>
+              <Select
+                value={callRecordingForm.callType}
+                onValueChange={(value: any) =>
+                  setCallRecordingForm({
+                    ...callRecordingForm,
+                    callType: value,
+                    productInterest: "",
+                    machineModel: "",
+                    serviceAccepted: undefined,
+                  })
+                }
+              >
+                <SelectTrigger id="call-type">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="product_inquiry">
+                    <div className="flex items-center gap-2">
+                      <Package className="h-4 w-4" />
+                      Product Inquiry
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="service_inquiry">
+                    <div className="flex items-center gap-2">
+                      <Wrench className="h-4 w-4" />
+                      Service Inquiry
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="machine_inquiry">
+                    <div className="flex items-center gap-2">
+                      <Smartphone className="h-4 w-4" />
+                      Machine Inquiry
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="follow_up">
+                    <div className="flex items-center gap-2">
+                      <Phone className="h-4 w-4" />
+                      Follow Up
+                    </div>
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
 
-          {selectedCallLog && (
-            <div className="space-y-4">
-              <div className="flex items-center gap-4">
-                <div className={`p-3 rounded-xl ${
-                  selectedCallLog.callDirection === 'inbound' ? 'bg-blue-50' : 'bg-green-50'
-                }`}>
-                  {selectedCallLog.callDirection === 'inbound' ? (
-                    <PhoneIncoming className={`h-6 w-6 ${
-                      selectedCallLog.callDirection === 'inbound' ? 'text-blue-600' : 'text-green-600'
-                    }`} />
-                  ) : (
-                    <PhoneOutgoing className="h-6 w-6 text-green-600" />
-                  )}
+            {/* Product Inquiry Fields */}
+            {callRecordingForm.callType === "product_inquiry" && (
+              <>
+                <div>
+                  <Label htmlFor="product-interest">Product Interested In *</Label>
+                  <Input
+                    id="product-interest"
+                    placeholder="Product name"
+                    value={callRecordingForm.productInterest}
+                    onChange={(e) =>
+                      setCallRecordingForm({
+                        ...callRecordingForm,
+                        productInterest: e.target.value,
+                      })
+                    }
+                  />
                 </div>
-                <div className="flex-1">
-                  <h3 className="text-xl font-semibold">{selectedCallLog.clientName}</h3>
-                  <p className="text-gray-600">{selectedCallLog.clientPhone}</p>
-                  {(selectedCallLog.clientFacilityName || selectedCallLog.clientRole) && (
-                    <p className="text-sm text-gray-500">{selectedCallLog.clientRole ? `${selectedCallLog.clientRole}` : ''}{selectedCallLog.clientRole && selectedCallLog.clientFacilityName ? ' • ' : ''}{selectedCallLog.clientFacilityName ? `${selectedCallLog.clientFacilityName}` : ''}</p>
-                  )}
+                <div>
+                  <Label htmlFor="purchase-date">Expected Purchase Date</Label>
+                  <Input
+                    id="purchase-date"
+                    type="date"
+                    value={callRecordingForm.expectedPurchaseDate}
+                    onChange={(e) =>
+                      setCallRecordingForm({
+                        ...callRecordingForm,
+                        expectedPurchaseDate: e.target.value,
+                      })
+                    }
+                  />
                 </div>
-                <Badge variant={getOutcomeBadgeVariant(selectedCallLog.callOutcome)} className="text-sm capitalize">
-                  {formatOutcome(selectedCallLog.callOutcome)}
-                </Badge>
-              </div>
+              </>
+            )}
 
-              <div className="grid grid-cols-2 gap-4 p-4 bg-gray-50 rounded-lg">
+            {/* Service Inquiry Fields */}
+            {callRecordingForm.callType === "service_inquiry" && (
+              <>
                 <div>
-                  <p className="text-sm text-gray-600">Date</p>
-                  <p className="font-medium">{new Date(selectedCallLog.callDate).toLocaleDateString()}</p>
+                  <Label htmlFor="machine-model">Machine Model *</Label>
+                  <Input
+                    id="machine-model"
+                    placeholder="Machine model name"
+                    value={callRecordingForm.machineModel}
+                    onChange={(e) =>
+                      setCallRecordingForm({
+                        ...callRecordingForm,
+                        machineModel: e.target.value,
+                      })
+                    }
+                  />
                 </div>
                 <div>
-                  <p className="text-sm text-gray-600">Time</p>
-                  <p className="font-medium">{selectedCallLog.callTime}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-gray-600">Duration</p>
-                  <p className="font-medium">{selectedCallLog.callDuration} minutes</p>
-                </div>
-                <div>
-                  <p className="text-sm text-gray-600">Logged By</p>
-                  <p className="font-medium">
-                    {selectedCallLog.createdBy.firstName} {selectedCallLog.createdBy.lastName}
-                  </p>
-                </div>
-              </div>
-
-              {selectedCallLog.nextAction && (
-                <div>
-                  <Label className="text-gray-600">Next Action</Label>
-                  <p className="mt-1 p-3 bg-blue-50 rounded-lg">{selectedCallLog.nextAction}</p>
-                </div>
-              )}
-
-              {selectedCallLog.followUpDate && (
-                <div>
-                  <Label className="text-gray-600">Follow-up Date</Label>
-                  <p className="mt-1 flex items-center gap-2 p-3 bg-yellow-50 rounded-lg text-yellow-800">
-                    <Bell className="h-4 w-4" />
-                    {new Date(selectedCallLog.followUpDate).toLocaleDateString()}
-                  </p>
-                </div>
-              )}
-
-              {selectedCallLog.callNotes && (
-                <div>
-                  <Label className="text-gray-600">Call Notes</Label>
-                  <p className="mt-1 p-3 bg-gray-50 rounded-lg whitespace-pre-wrap">
-                    {selectedCallLog.callNotes}
-                  </p>
-                </div>
-              )}
-
-              {selectedCallLog.tags && selectedCallLog.tags.length > 0 && (
-                <div>
-                  <Label className="text-gray-600">Tags</Label>
-                  <div className="flex gap-2 mt-2">
-                    {selectedCallLog.tags.map((tag, idx) => (
-                      <Badge key={idx} variant="outline">
-                        <Tag className="h-3 w-3 mr-1" />
-                        {tag}
-                      </Badge>
-                    ))}
+                  <Label>Service Status *</Label>
+                  <div className="flex gap-3 mt-2">
+                    <Button
+                      variant={
+                        callRecordingForm.serviceAccepted === true
+                          ? "default"
+                          : "outline"
+                      }
+                      onClick={() =>
+                        setCallRecordingForm({
+                          ...callRecordingForm,
+                          serviceAccepted: true,
+                        })
+                      }
+                      className="flex-1"
+                    >
+                      <CheckCircle2 className="mr-2 h-4 w-4" />
+                      Accepted
+                    </Button>
+                    <Button
+                      variant={
+                        callRecordingForm.serviceAccepted === false
+                          ? "default"
+                          : "outline"
+                      }
+                      onClick={() =>
+                        setCallRecordingForm({
+                          ...callRecordingForm,
+                          serviceAccepted: false,
+                        })
+                      }
+                      className="flex-1"
+                    >
+                      <AlertCircle className="mr-2 h-4 w-4" />
+                      Declined
+                    </Button>
                   </div>
                 </div>
-              )}
-            </div>
-          )}
+              </>
+            )}
 
+            {/* Machine Inquiry Fields */}
+            {callRecordingForm.callType === "machine_inquiry" && (
+              <div>
+                <Label htmlFor="machine-inquiry">Machine Details</Label>
+                <Input
+                  id="machine-inquiry"
+                  placeholder="Machine details or inquiry specifics"
+                  value={callRecordingForm.machineModel}
+                  onChange={(e) =>
+                    setCallRecordingForm({
+                      ...callRecordingForm,
+                      machineModel: e.target.value,
+                    })
+                  }
+                />
+              </div>
+            )}
+
+            {/* Common Notes Field */}
+            <div>
+              <Label htmlFor="call-notes">Notes</Label>
+              <Textarea
+                id="call-notes"
+                placeholder="Add any additional notes about the call..."
+                value={callRecordingForm.notes}
+                onChange={(e) =>
+                  setCallRecordingForm({
+                    ...callRecordingForm,
+                    notes: e.target.value,
+                  })
+                }
+                className="min-h-20"
+              />
+            </div>
+
+            {/* Auto-recorded info */}
+            <div className="bg-blue-50 p-3 rounded-md text-sm text-blue-900">
+              <Clock className="h-4 w-4 inline mr-2" />
+              Date and time will be recorded automatically when you save this call.
+            </div>
+          </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setIsViewDialogOpen(false)}>
-              Close
-            </Button>
             <Button
               variant="outline"
-              onClick={() => {
-                setIsViewDialogOpen(false)
-                if (selectedCallLog) handleEdit(selectedCallLog)
-              }}
+              onClick={() => setIsCallRecordingDialog(false)}
             >
-              <Edit className="h-4 w-4 mr-2" />
-              Edit
+              Cancel
             </Button>
             <Button
-              variant="destructive"
-              onClick={() => {
-                if (selectedCallLog) handleDelete(selectedCallLog._id)
-              }}
+              onClick={() =>
+                recordCallMutation.mutate({
+                  clientId: selectedClient?.id || "",
+                  ...callRecordingForm,
+                })
+              }
+              disabled={
+                !callRecordingForm.productInterest &&
+                callRecordingForm.callType === "product_inquiry"
+              }
             >
-              <Trash2 className="h-4 w-4 mr-2" />
-              Delete
+              Record Call
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Telesales Summary Dialog */}
+      <Dialog open={isSummaryDialog} onOpenChange={setIsSummaryDialog}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Telesales Summary</DialogTitle>
+          </DialogHeader>
+          
+          {summaryLoading ? (
+            <div className="flex items-center justify-center py-8">
+              <p className="text-muted-foreground">Loading summary...</p>
+            </div>
+          ) : summaryData ? (
+            <div className="space-y-6">
+              {/* Key Metrics */}
+              <div className="grid grid-cols-2 gap-4">
+                <Card>
+                  <CardContent className="pt-6">
+                    <p className="text-sm text-muted-foreground">Total Calls</p>
+                    <p className="text-3xl font-bold">{summaryData.totalCalls}</p>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardContent className="pt-6">
+                    <p className="text-sm text-muted-foreground">Avg Duration (sec)</p>
+                    <p className="text-3xl font-bold">{Math.round(summaryData.avgDuration || 0)}</p>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardContent className="pt-6">
+                    <p className="text-sm text-muted-foreground">Conversion Rate</p>
+                    <p className="text-3xl font-bold text-green-600">{summaryData.conversionRate}%</p>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardContent className="pt-6">
+                    <p className="text-sm text-muted-foreground">Interest Rate</p>
+                    <p className="text-3xl font-bold text-blue-600">{summaryData.interestRate}%</p>
+                  </CardContent>
+                </Card>
+              </div>
+
+              {/* Call Types */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-lg">Calls by Type</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <p className="text-sm text-muted-foreground">Product Inquiries</p>
+                      <p className="text-2xl font-bold">{summaryData.productInquiries}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-muted-foreground">Service Inquiries</p>
+                      <p className="text-2xl font-bold">{summaryData.serviceInquiries}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-muted-foreground">Machine Inquiries</p>
+                      <p className="text-2xl font-bold">{summaryData.machineInquiries}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-muted-foreground">Follow-ups</p>
+                      <p className="text-2xl font-bold">{summaryData.followUps}</p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Call Outcomes */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-lg">Outcomes</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-3 gap-4">
+                    <div>
+                      <p className="text-sm text-muted-foreground">Interested</p>
+                      <p className="text-2xl font-bold text-green-600">{summaryData.interested}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-muted-foreground">Sales Closed</p>
+                      <p className="text-2xl font-bold text-blue-600">{summaryData.saleClosed}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-muted-foreground">Follow-up Needed</p>
+                      <p className="text-2xl font-bold text-yellow-600">{summaryData.followUpNeeded}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-muted-foreground">No Answer</p>
+                      <p className="text-2xl font-bold text-gray-600">{summaryData.noAnswer}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-muted-foreground">Not Interested</p>
+                      <p className="text-2xl font-bold text-red-600">{summaryData.notInterested}</p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          ) : (
+            <div className="flex items-center justify-center py-8">
+              <p className="text-muted-foreground">No data available</p>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </div>
