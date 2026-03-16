@@ -30,6 +30,7 @@ import {
   Search,
   RefreshCw,
   History,
+  Download,
 } from "lucide-react"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
@@ -135,9 +136,11 @@ export default function TelessalesRevamp() {
 
     // Parse visits and add to client map
     const visitsDocsArray = visitsData?.data?.docs || []
-    const visitsArray = Array.isArray(visitsDocsArray) ? visitsDocsArray : []
+    const visitsArray = Array.isArray(visitsDocsArray) ? visitsDocsArray.filter(v => v != null) : []
 
     visitsArray.forEach((visit: any) => {
+      if (!visit || !visit.client) return
+      
       const facilityName = visit.client?.name
       const location = visit.client?.location
       
@@ -149,7 +152,7 @@ export default function TelessalesRevamp() {
           const firstContact = Array.isArray(visit.contacts) && visit.contacts.length > 0 ? visit.contacts[0] : null
           
           clientMap.set(key, {
-            id: `visit-${visit._id}`,
+            id: `visit-${visit._id || 'unknown'}`,
             facilityName,
             location: location || "Unknown Location",
             machineInstalled: false,
@@ -174,9 +177,11 @@ export default function TelessalesRevamp() {
 
     // Parse machines and add/update in client map
     // Machines API returns: { data: { docs: [...], totalDocs, etc } }
-    const machinesArray = Array.isArray(machinesData?.data?.docs) ? machinesData.data.docs : []
+    const machinesArray = Array.isArray(machinesData?.data?.docs) ? machinesData.data.docs.filter(m => m != null) : []
 
     machinesArray.forEach((machine: any) => {
+      if (!machine || !machine.facility) return
+      
       // Get facility from facility object (not array)
       const facility = machine.facility
       const facilityName = facility?.name
@@ -190,7 +195,7 @@ export default function TelessalesRevamp() {
 
         if (!clientMap.has(key)) {
           clientMap.set(key, {
-            id: `machine-${machine._id}`,
+            id: `machine-${machine._id || 'unknown'}`,
             facilityName: facilityName,
             location: location || "Unknown Location",
             machineInstalled: true,
@@ -470,6 +475,70 @@ export default function TelessalesRevamp() {
     fetchTelesalesSummary()
   }
 
+  // ==================== Export Functions ====================
+
+  const getLastCallDate = (client: Client): string => {
+    const callActivity = client.activityHistory.find(a => a.type === 'call')
+    if (callActivity) {
+      return new Date(callActivity.date).toLocaleDateString()
+    }
+    return "Never called"
+  }
+
+  const exportToExcel = () => {
+    try {
+      // Prepare data for export
+      const data = filteredClients.map(client => ({
+        'Client Name': client.facilityName,
+        'Location': client.location,
+        'Machine Installed': client.machineInstalled ? 'Yes' : 'No',
+        'Contact Phone': client.contactPerson?.phone || '',
+        'Contact Person Name': client.contactPerson?.name || '',
+        'Contact Role': client.contactPerson?.role || '',
+        'Last Call Date': getLastCallDate(client),
+        'Last Activity': client.lastActivity?.description || 'No activity',
+        'Activity Date': client.lastActivity?.date ? new Date(client.lastActivity.date).toLocaleDateString() : '',
+      }))
+
+      // Create CSV content
+      const headers = Object.keys(data[0] || {})
+      const csvContent = [
+        headers.join(','),
+        ...data.map(row => 
+          headers.map(header => {
+            const value = row[header as keyof typeof row]
+            // Escape quotes and wrap in quotes if contains comma
+            const escaped = String(value).replace(/"/g, '""')
+            return escaped.includes(',') ? `"${escaped}"` : escaped
+          }).join(',')
+        )
+      ].join('\n')
+
+      // Create blob and download
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+      const link = document.createElement('a')
+      const url = URL.createObjectURL(blob)
+      link.setAttribute('href', url)
+      link.setAttribute('download', `telesales_clients_${new Date().toISOString().split('T')[0]}.csv`)
+      link.style.visibility = 'hidden'
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+
+      toast({
+        title: "Success",
+        description: `Downloaded ${data.length} clients`,
+      })
+    } catch (error) {
+      console.error('Export error:', error)
+      toast({
+        title: "Error",
+        description: "Failed to export data",
+        variant: "destructive",
+      })
+    }
+  }
+
   // ==================== Render Functions ====================
 
   const renderClientList = () => (
@@ -527,6 +596,12 @@ export default function TelessalesRevamp() {
                         <Calendar className="h-4 w-4" />
                         Last Activity: {client.lastActivity.description} •{" "}
                         {new Date(client.lastActivity.date).toLocaleDateString()}
+                      </div>
+                    )}
+                    {client.activityHistory.some(a => a.type === 'call') && (
+                      <div className="flex items-center gap-2 mt-1">
+                        <Phone className="h-4 w-4 text-blue-600" />
+                        <span className="text-blue-600 font-medium">Last Called: {getLastCallDate(client)}</span>
                       </div>
                     )}
                   </div>
@@ -719,6 +794,14 @@ export default function TelessalesRevamp() {
               Call History
             </Button>
           </Link>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={exportToExcel}
+          >
+            <Download className="h-4 w-4 mr-2" />
+            Export
+          </Button>
           <Button
             onClick={() => setIsAddClientDialog(true)}
             className="bg-blue-600 hover:bg-blue-700"

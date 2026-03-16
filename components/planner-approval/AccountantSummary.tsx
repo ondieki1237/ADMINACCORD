@@ -106,10 +106,11 @@ export default function AccountantSummary() {
     // Extract unique active users across ALL approved planners (for the dropdown)
     const allUsersMap = new Map<string, { id: string, name: string }>();
     approvedPlanners.forEach(p => {
+        if (!p.userId || !p.userId._id) return;  // Skip if userId is null
         if (!allUsersMap.has(p.userId._id)) {
             allUsersMap.set(p.userId._id, {
                 id: p.userId._id,
-                name: `${p.userId.firstName} ${p.userId.lastName}`
+                name: `${p.userId.firstName || 'Unknown'} ${p.userId.lastName || ''}`.trim()
             });
         }
     });
@@ -120,11 +121,13 @@ export default function AccountantSummary() {
     let grandTotalAllowance = 0;
 
     plannersForSelectedPeriod.forEach(planner => {
+        if (!planner.userId || !planner.userId._id) return;  // Skip if userId is null
+        
         const uId = planner.userId._id;
         if (!userMap.has(uId)) {
             userMap.set(uId, {
-                name: `${planner.userId.firstName} ${planner.userId.lastName}`,
-                email: planner.userId.email,
+                name: `${planner.userId.firstName || 'Unknown'} ${planner.userId.lastName || ''}`.trim(),
+                email: planner.userId.email || 'unknown@email.com',
                 totalAllowance: 0,
                 approvedPlannersCount: 0
             });
