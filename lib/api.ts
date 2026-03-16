@@ -625,6 +625,13 @@ class ApiService {
     });
   }
 
+  async quickInstallMachine(payload: Record<string, any>): Promise<any> {
+    return this.makeRequest(`/admin/machines/install`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  }
+
   // Consumables endpoints
   async getConsumables(page = 1, limit = 20, filters: Record<string, any> = {}): Promise<any> {
     const params = new URLSearchParams({

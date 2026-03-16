@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState, useMemo } from "react"
+import React, { useState, useMemo, useRef } from "react"
 import Link from "next/link"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { apiService } from "@/lib/api"
@@ -31,6 +31,7 @@ import {
   RefreshCw,
   History,
   Download,
+  Edit,
 } from "lucide-react"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
@@ -77,7 +78,12 @@ export default function TelessalesRevamp() {
 
   // ==================== State Management ====================
   const [selectedClient, setSelectedClient] = useState<Client | null>(null)
+  const [scrollPosition, setScrollPosition] = useState(0)
+  const contentsContainerRef = useRef<HTMLDivElement>(null)
   const [isAddClientDialog, setIsAddClientDialog] = useState(false)
+  const [isEditClientDialog, setIsEditClientDialog] = useState(false)
+  const [isQuickInstallDialog, setIsQuickInstallDialog] = useState(false)
+  const [isEditingMachine, setIsEditingMachine] = useState(false)
   const [isCallRecordingDialog, setIsCallRecordingDialog] = useState(false)
   const [isSummaryDialog, setIsSummaryDialog] = useState(false)
   const [searchQuery, setSearchQuery] = useState("")
@@ -95,6 +101,38 @@ export default function TelessalesRevamp() {
     contactPersonRole: "",
     contactPersonPhone: "",
     machineInstalled: false,
+  })
+
+  // Edit client form state
+  const [editClientForm, setEditClientForm] = useState({
+    facilityName: "",
+    facilityLevel: "",
+    location: "",
+    contactPersonName: "",
+    contactPersonRole: "",
+    contactPersonPhone: "",
+    contactPersonEmail: "",
+    model: "",
+    manufacturer: "",
+    installedDate: "",
+    purchaseDate: "",
+    warrantyExpiry: "",
+    lastServicedAt: "",
+    nextServiceDue: "",
+    status: "active",
+  })
+
+  // Quick install form state
+  const [quickInstallForm, setQuickInstallForm] = useState({
+    facilityName: "",
+    location: "",
+    contactPerson: "",
+    phoneNumber: "",
+    role: "",
+    machineInstalled: false,
+    machineName: "",
+    serialNumber: "",
+    manufacturer: "",
   })
 
   // Call recording form state
@@ -459,6 +497,139 @@ export default function TelessalesRevamp() {
     },
   })
 
+  const updateMachineMutation = useMutation({
+    mutationFn: async (data: any) => {
+      if (!selectedClient) throw new Error("No client selected")
+      
+      // Extract machine ID from client ID (format: machine-{_id})
+      const machineId = selectedClient.id.replace('machine-', '')
+      
+      // Build payload only with non-empty fields
+      const updatePayload: any = {}
+
+      // Build facility object with only non-empty fields
+      const facilityData: any = {}
+      if (data.facilityName?.trim()) facilityData.name = data.facilityName.trim()
+      if (data.facilityLevel?.trim()) facilityData.level = data.facilityLevel.trim()
+      if (data.location?.trim()) facilityData.location = data.location.trim()
+      
+      if (Object.keys(facilityData).length > 0) {
+        updatePayload.facility = facilityData
+      }
+
+      // Build contactPerson object with only non-empty fields
+      const contactData: any = {}
+      if (data.contactPersonName?.trim()) contactData.name = data.contactPersonName.trim()
+      if (data.contactPersonRole?.trim()) contactData.role = data.contactPersonRole.trim()
+      if (data.contactPersonPhone?.trim()) contactData.phone = data.contactPersonPhone.trim()
+      if (data.contactPersonEmail?.trim()) contactData.email = data.contactPersonEmail.trim()
+      
+      if (Object.keys(contactData).length > 0) {
+        updatePayload.contactPerson = contactData
+      }
+
+      // Add individual fields only if they have values
+      if (data.model?.trim()) updatePayload.model = data.model.trim()
+      if (data.manufacturer?.trim()) updatePayload.manufacturer = data.manufacturer.trim()
+      if (data.installedDate?.trim()) updatePayload.installedDate = data.installedDate
+      if (data.purchaseDate?.trim()) updatePayload.purchaseDate = data.purchaseDate
+      if (data.warrantyExpiry?.trim()) updatePayload.warrantyExpiry = data.warrantyExpiry
+      if (data.lastServicedAt?.trim()) updatePayload.lastServicedAt = data.lastServicedAt
+      if (data.nextServiceDue?.trim()) updatePayload.nextServiceDue = data.nextServiceDue
+      if (data.status?.trim()) updatePayload.status = data.status
+
+      // Check if there are any fields to update
+      if (Object.keys(updatePayload).length === 0) {
+        throw new Error("No fields to update. Please fill in at least one field.")
+      }
+
+      const result = await apiService.updateMachine(machineId, updatePayload)
+      return result
+    },
+    onSuccess: (result: any) => {
+      toast({
+        title: "Success",
+        description: `Machine updated successfully! ${result.data?.audit?.changedCount || 0} field(s) changed.`,
+      })
+      
+      setIsEditClientDialog(false)
+      setIsEditingMachine(false)
+      
+      // Refresh the data
+      qc.invalidateQueries({ queryKey: ["telesales-machines"] })
+      qc.invalidateQueries({ queryKey: ["client-call-history"] })
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to update machine",
+        variant: "destructive",
+      })
+      setIsEditingMachine(false)
+    },
+  })
+
+  const quickInstallMutation = useMutation({
+    mutationFn: async (data: any) => {
+      const payload = {
+        facilityName: data.facilityName,
+        location: data.location,
+        contactPerson: data.contactPerson,
+        phoneNumber: data.phoneNumber,
+        role: data.role,
+        machineInstalled: data.machineInstalled,
+      }
+
+      // Add machine details if installing a machine
+      if (data.machineInstalled) {
+        Object.assign(payload, {
+          machineName: data.machineName,
+          serialNumber: data.serialNumber,
+          manufacturer: data.manufacturer,
+        })
+      }
+
+      // Call the API endpoint
+      const result = await apiService.quickInstallMachine(payload)
+
+      return result
+    },
+    onSuccess: (result: any) => {
+      toast({
+        title: "Success",
+        description: quickInstallForm.machineInstalled
+          ? "Facility registered and machine installed successfully!"
+          : "Facility registered successfully!",
+      })
+
+      // Reset form
+      setQuickInstallForm({
+        facilityName: "",
+        location: "",
+        contactPerson: "",
+        phoneNumber: "",
+        role: "",
+        machineInstalled: false,
+        machineName: "",
+        serialNumber: "",
+        manufacturer: "",
+      })
+
+      setIsQuickInstallDialog(false)
+
+      // Refresh the data
+      qc.invalidateQueries({ queryKey: ["telesales-machines"] })
+      qc.invalidateQueries({ queryKey: ["telesales-visits"] })
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to register facility",
+        variant: "destructive",
+      })
+    },
+  })
+
   // ==================== Summary Function ====================
 
   const fetchTelesalesSummary = async () => {
@@ -562,22 +733,19 @@ export default function TelessalesRevamp() {
         <div className="col-span-full text-center py-12">
           <AlertCircle className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
           <p className="text-muted-foreground">No clients found</p>
-          <Button
-            variant="outline"
-            size="sm"
-            className="mt-4"
-            onClick={() => setIsAddClientDialog(true)}
-          >
-            <Plus className="mr-2 h-4 w-4" />
-            Add New Client
-          </Button>
         </div>
       ) : (
         filteredClients.map((client) => (
           <Card
             key={client.id}
             className="cursor-pointer hover:shadow-md transition-shadow"
-            onClick={() => setSelectedClient(client)}
+            onClick={() => {
+              // Save current scroll position before opening client details
+              if (contentsContainerRef.current) {
+                setScrollPosition(contentsContainerRef.current.scrollTop)
+              }
+              setSelectedClient(client)
+            }}
           >
             <CardContent className="pt-6">
               <div className="flex justify-between items-start">
@@ -647,7 +815,15 @@ export default function TelessalesRevamp() {
           <Button
             variant="ghost"
             size="sm"
-            onClick={() => setSelectedClient(null)}
+            onClick={() => {
+              setSelectedClient(null)
+              // Restore scroll position after a short delay to allow re-render
+              setTimeout(() => {
+                if (contentsContainerRef.current) {
+                  contentsContainerRef.current.scrollTop = scrollPosition
+                }
+              }, 0)
+            }}
             className="mb-4"
           >
             <ArrowLeft className="mr-2 h-4 w-4" />
@@ -695,7 +871,36 @@ export default function TelessalesRevamp() {
         </Card>
 
         {/* Action Buttons */}
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-3 gap-3">
+          {selectedClient.source === 'machine' && selectedClient.machineInstalled && (
+            <Button
+              onClick={() => {
+                // Populate edit form with current client data
+                setEditClientForm({
+                  facilityName: selectedClient.facilityName,
+                  facilityLevel: "",
+                  location: selectedClient.location,
+                  contactPersonName: selectedClient.contactPerson?.name || "",
+                  contactPersonRole: selectedClient.contactPerson?.role || "",
+                  contactPersonPhone: selectedClient.contactPerson?.phone || "",
+                  contactPersonEmail: "",
+                  model: "",
+                  manufacturer: "",
+                  installedDate: "",
+                  purchaseDate: "",
+                  warrantyExpiry: "",
+                  lastServicedAt: "",
+                  nextServiceDue: "",
+                  status: "active",
+                })
+                setIsEditClientDialog(true)
+              }}
+              className="w-full bg-amber-600 hover:bg-amber-700"
+            >
+              <Edit className="mr-2 h-4 w-4" />
+              Edit Details
+            </Button>
+          )}
           <Button
             onClick={() => setIsCallRecordingDialog(true)}
             className="w-full bg-blue-600 hover:bg-blue-700"
@@ -898,11 +1103,11 @@ export default function TelessalesRevamp() {
             Export
           </Button>
           <Button
-            onClick={() => setIsAddClientDialog(true)}
-            className="bg-blue-600 hover:bg-blue-700"
+            onClick={() => setIsQuickInstallDialog(true)}
+            className="bg-green-600 hover:bg-green-700"
           >
             <Plus className="mr-2 h-4 w-4" />
-            Add New Client
+            Quick Register & Install
           </Button>
         </div>
       </div>
@@ -923,12 +1128,13 @@ export default function TelessalesRevamp() {
       )}
 
       {/* Main Content */}
-      {selectedClient ? (
-        renderClientDetails()
-      ) : (
-        <>
-          {/* Search Bar */}
-          <div className="relative">
+      <div ref={contentsContainerRef} className="overflow-y-auto">
+        {selectedClient ? (
+          renderClientDetails()
+        ) : (
+          <>
+            {/* Search Bar */}
+            <div className="relative">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
               placeholder="Search by facility name, location, or contact..."
@@ -1072,7 +1278,8 @@ export default function TelessalesRevamp() {
             {renderClientList()}
           </div>
         </>
-      )}
+        )}
+      </div>
 
       {/* Add Client Dialog */}
       <Dialog open={isAddClientDialog} onOpenChange={setIsAddClientDialog}>
@@ -1181,6 +1388,148 @@ export default function TelessalesRevamp() {
               }
             >
               Add Client
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Quick Register & Install Dialog */}
+      <Dialog open={isQuickInstallDialog} onOpenChange={setIsQuickInstallDialog}>
+        <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Quick Register Facility & Install Machine</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            {/* Facility Information */}
+            <div className="border-b pb-4">
+              <h3 className="font-semibold text-sm mb-3">Facility Information</h3>
+              <div className="space-y-3">
+                <div>
+                  <Label htmlFor="facility-name">Facility Name *</Label>
+                  <Input
+                    id="facility-name"
+                    placeholder="Hospital/Clinic name"
+                    value={quickInstallForm.facilityName}
+                    onChange={(e) => setQuickInstallForm({...quickInstallForm, facilityName: e.target.value})}
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="location">Location *</Label>
+                  <Input
+                    id="location"
+                    placeholder="City/Address"
+                    value={quickInstallForm.location}
+                    onChange={(e) => setQuickInstallForm({...quickInstallForm, location: e.target.value})}
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Contact Information */}
+            <div className="border-b pb-4">
+              <h3 className="font-semibold text-sm mb-3">Contact Person</h3>
+              <div className="space-y-3">
+                <div>
+                  <Label htmlFor="contact-person">Contact Name *</Label>
+                  <Input
+                    id="contact-person"
+                    placeholder="Person name"
+                    value={quickInstallForm.contactPerson}
+                    onChange={(e) => setQuickInstallForm({...quickInstallForm, contactPerson: e.target.value})}
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="phone">Phone Number *</Label>
+                  <Input
+                    id="phone"
+                    placeholder="+254-700-000000"
+                    value={quickInstallForm.phoneNumber}
+                    onChange={(e) => setQuickInstallForm({...quickInstallForm, phoneNumber: e.target.value})}
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="role">Role *</Label>
+                  <Input
+                    id="role"
+                    placeholder="Facility Manager, Doctor, etc."
+                    value={quickInstallForm.role}
+                    onChange={(e) => setQuickInstallForm({...quickInstallForm, role: e.target.value})}
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Machine Installation */}
+            <div className="border-b pb-4">
+              <div className="flex items-center gap-2 mb-3">
+                <input
+                  type="checkbox"
+                  id="machine-installed"
+                  checked={quickInstallForm.machineInstalled}
+                  onChange={(e) => setQuickInstallForm({...quickInstallForm, machineInstalled: e.target.checked})}
+                />
+                <Label htmlFor="machine-installed" className="font-semibold text-sm cursor-pointer">
+                  Install Machine
+                </Label>
+              </div>
+
+              {quickInstallForm.machineInstalled && (
+                <div className="space-y-3">
+                  <div>
+                    <Label htmlFor="machine-name">Machine Name/Model</Label>
+                    <Input
+                      id="machine-name"
+                      placeholder="e.g., X-Ray Model 5000"
+                      value={quickInstallForm.machineName}
+                      onChange={(e) => setQuickInstallForm({...quickInstallForm, machineName: e.target.value})}
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="serial-number">Serial Number</Label>
+                    <Input
+                      id="serial-number"
+                      placeholder="e.g., SN-2026-001"
+                      value={quickInstallForm.serialNumber}
+                      onChange={(e) => setQuickInstallForm({...quickInstallForm, serialNumber: e.target.value})}
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="manufacturer">Manufacturer</Label>
+                    <Input
+                      id="manufacturer"
+                      placeholder="e.g., Siemens"
+                      value={quickInstallForm.manufacturer}
+                      onChange={(e) => setQuickInstallForm({...quickInstallForm, manufacturer: e.target.value})}
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setIsQuickInstallDialog(false)}
+              disabled={quickInstallMutation.isPending}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={() => quickInstallMutation.mutate(quickInstallForm)}
+              className="bg-green-600 hover:bg-green-700"
+              disabled={
+                !quickInstallForm.facilityName ||
+                !quickInstallForm.location ||
+                !quickInstallForm.contactPerson ||
+                !quickInstallForm.phoneNumber ||
+                !quickInstallForm.role ||
+                (quickInstallForm.machineInstalled && 
+                  (!quickInstallForm.machineName || !quickInstallForm.serialNumber || !quickInstallForm.manufacturer)) ||
+                quickInstallMutation.isPending
+              }
+            >
+              {quickInstallMutation.isPending ? "Registering..." : "Register Facility"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1394,6 +1743,198 @@ export default function TelessalesRevamp() {
               }
             >
               Record Call
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Client Dialog */}
+      <Dialog open={isEditClientDialog} onOpenChange={setIsEditClientDialog}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Edit Facility Details - {selectedClient?.facilityName}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            {/* Facility Section */}
+            <div className="space-y-3 border-b pb-4">
+              <h3 className="font-semibold text-sm">Facility Information</h3>
+              <div>
+                <Label>Facility Name</Label>
+                <Input
+                  value={editClientForm.facilityName}
+                  onChange={(e) => setEditClientForm({...editClientForm, facilityName: e.target.value})}
+                  placeholder="Facility name"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label>Facility Level</Label>
+                  <Input
+                    value={editClientForm.facilityLevel}
+                    onChange={(e) => setEditClientForm({...editClientForm, facilityLevel: e.target.value})}
+                    placeholder="Primary, Secondary, Tertiary"
+                  />
+                </div>
+                <div>
+                  <Label>Location</Label>
+                  <Input
+                    value={editClientForm.location}
+                    onChange={(e) => setEditClientForm({...editClientForm, location: e.target.value})}
+                    placeholder="City/Address"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Contact Person Section */}
+            <div className="space-y-3 border-b pb-4">
+              <h3 className="font-semibold text-sm">Contact Person</h3>
+              <div>
+                <Label>Contact Name</Label>
+                <Input
+                  value={editClientForm.contactPersonName}
+                  onChange={(e) => setEditClientForm({...editClientForm, contactPersonName: e.target.value})}
+                  placeholder="Person name"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label>Role</Label>
+                  <Input
+                    value={editClientForm.contactPersonRole}
+                    onChange={(e) => setEditClientForm({...editClientForm, contactPersonRole: e.target.value})}
+                    placeholder="Job role/title"
+                  />
+                </div>
+                <div>
+                  <Label>Phone</Label>
+                  <Input
+                    value={editClientForm.contactPersonPhone}
+                    onChange={(e) => setEditClientForm({...editClientForm, contactPersonPhone: e.target.value})}
+                    placeholder="+254-700-000000"
+                  />
+                </div>
+              </div>
+              <div>
+                <Label>Email</Label>
+                <Input
+                  type="email"
+                  value={editClientForm.contactPersonEmail}
+                  onChange={(e) => setEditClientForm({...editClientForm, contactPersonEmail: e.target.value})}
+                  placeholder="email@example.com"
+                />
+              </div>
+            </div>
+
+            {/* Machine Information Section */}
+            <div className="space-y-3 border-b pb-4">
+              <h3 className="font-semibold text-sm">Machine Information</h3>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label>Model</Label>
+                  <Input
+                    value={editClientForm.model}
+                    onChange={(e) => setEditClientForm({...editClientForm, model: e.target.value})}
+                    placeholder="Machine model"
+                  />
+                </div>
+                <div>
+                  <Label>Manufacturer</Label>
+                  <Input
+                    value={editClientForm.manufacturer}
+                    onChange={(e) => setEditClientForm({...editClientForm, manufacturer: e.target.value})}
+                    placeholder="Manufacturer name"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Service Dates Section */}
+            <div className="space-y-3 border-b pb-4">
+              <h3 className="font-semibold text-sm">Service Dates</h3>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label>Installed Date</Label>
+                  <Input
+                    type="date"
+                    value={editClientForm.installedDate}
+                    onChange={(e) => setEditClientForm({...editClientForm, installedDate: e.target.value})}
+                  />
+                </div>
+                <div>
+                  <Label>Purchase Date</Label>
+                  <Input
+                    type="date"
+                    value={editClientForm.purchaseDate}
+                    onChange={(e) => setEditClientForm({...editClientForm, purchaseDate: e.target.value})}
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label>Warranty Expiry</Label>
+                  <Input
+                    type="date"
+                    value={editClientForm.warrantyExpiry}
+                    onChange={(e) => setEditClientForm({...editClientForm, warrantyExpiry: e.target.value})}
+                  />
+                </div>
+                <div>
+                  <Label>Last Serviced</Label>
+                  <Input
+                    type="date"
+                    value={editClientForm.lastServicedAt}
+                    onChange={(e) => setEditClientForm({...editClientForm, lastServicedAt: e.target.value})}
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label>Next Service Due</Label>
+                  <Input
+                    type="date"
+                    value={editClientForm.nextServiceDue}
+                    onChange={(e) => setEditClientForm({...editClientForm, nextServiceDue: e.target.value})}
+                  />
+                </div>
+                <div>
+                  <Label>Status</Label>
+                  <Select
+                    value={editClientForm.status}
+                    onValueChange={(value) => setEditClientForm({...editClientForm, status: value})}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="active">Active</SelectItem>
+                      <SelectItem value="inactive">Inactive</SelectItem>
+                      <SelectItem value="maintenance">Maintenance</SelectItem>
+                      <SelectItem value="decommissioned">Decommissioned</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setIsEditClientDialog(false)}
+              disabled={isEditingMachine}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={() => {
+                setIsEditingMachine(true)
+                updateMachineMutation.mutate(editClientForm)
+              }}
+              className="bg-amber-600 hover:bg-amber-700"
+              disabled={isEditingMachine}
+            >
+              {isEditingMachine ? "Saving..." : "Save Changes"}
             </Button>
           </DialogFooter>
         </DialogContent>
