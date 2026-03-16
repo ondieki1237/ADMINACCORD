@@ -35,6 +35,9 @@ export default function AccountantSummary() {
         return d;
     });
     const [selectedUserFilter, setSelectedUserFilter] = useState<string>('all');
+    const [callDateStart, setCallDateStart] = useState<string>('');
+    const [callDateEnd, setCallDateEnd] = useState<string>('');
+    const [callOutcomeFilter, setCallOutcomeFilter] = useState<'all' | 'successful' | 'service'>('all');
 
     const loadData = async () => {
         setLoading(true);
@@ -155,46 +158,77 @@ export default function AccountantSummary() {
     const downloadExcel = () => {
         const wb = XLSX.utils.book_new();
         const usernameLabel = selectedUserFilter === 'all' ? 'All_Users' : userMap.get(selectedUserFilter)?.name.replace(/\s+/g, '_') || 'User';
+        const outcomeLabel = callOutcomeFilter === 'successful' ? 'Successful_Calls' : callOutcomeFilter === 'service' ? 'Service_Inquiry' : 'All_Calls';
 
         // 1. Export User Summary
         const exportData = aggregateUsers.map(u => ({
             'Full Name': u.name,
             'Email': u.email,
-            'Total Expenditure (KES)': u.totalAllowance
+            'Total Expenditure (KES)': u.totalAllowance,
+            'Call Outcome Filter': outcomeLabel
         }));
 
         const wsUsers = XLSX.utils.json_to_sheet(exportData);
         XLSX.utils.book_append_sheet(wb, wsUsers, `Summary`);
 
-        // 2. Export Daily Expenditures Breakdown
+        // 2. Export Daily Expenditures Breakdown with Call Outcome Filter
         const dailyData = [];
 
         for (const p of plannersForSelectedPeriod) {
             if (!p.days) continue;
             for (const d of p.days) {
                 if (d.date && isDateInPeriod(d.date)) {
+                    // Apply call date range filter if specified
+                    let isWithinDateRange = true;
+                    if (callDateStart || callDateEnd) {
+                        const dayDate = new Date(d.date);
+                        if (callDateStart && dayDate < new Date(callDateStart)) isWithinDateRange = false;
+                        if (callDateEnd && dayDate > new Date(callDateEnd)) isWithinDateRange = false;
+                    }
+
+                    if (!isWithinDateRange) continue;
+
+                    // Apply call outcome filter (map d.prospects or notes to outcome)
+                    let outcomeMatches = true;
+                    if (callOutcomeFilter !== 'all') {
+                        const prospectText = (d.prospects || '').toLowerCase();
+                        const placeText = (d.place || '').toLowerCase();
+                        const meansText = (d.means || '').toLowerCase();
+                        
+                        if (callOutcomeFilter === 'successful') {
+                            outcomeMatches = prospectText.includes('successful') || prospectText.includes('closed') || prospectText.includes('converted');
+                        } else if (callOutcomeFilter === 'service') {
+                            outcomeMatches = prospectText.includes('service') || prospectText.includes('maintenance') || prospectText.includes('repair');
+                        }
+                    }
+
+                    if (!outcomeMatches) continue;
+
                     dailyData.push({
                         'Employee Name': `${p.userId.firstName} ${p.userId.lastName}`,
                         'Date': new Date(d.date).toLocaleDateString(),
                         'Location/Place': d.place || 'N/A',
                         'Means of Transport': d.means || 'N/A',
                         'Daily Allowance (KES)': parseFloat(d.allowance) || 0,
-                        'Prospects/Notes': d.prospects || ''
+                        'Prospects/Notes': d.prospects || '',
+                        'Call Outcome': callOutcomeFilter
                     });
                 }
             }
         }
 
         // Sort daily data chronologically
-        dailyData.sort((a, b) => new Date(a.Date).getTime() - new Date(b.Date).getTime());
+        dailyData.sort((a, b) => new Date(a['Date']).getTime() - new Date(b['Date']).getTime());
 
         const wsDaily = XLSX.utils.json_to_sheet(dailyData);
         XLSX.utils.book_append_sheet(wb, wsDaily, 'Daily Detailed Log');
 
-        // Note: No MongoDB employee IDs are included in this export.
-
+        // Generate filename with all filters
         const fileNameSafePeriod = periodLabel.replace(/\s+/g, '_').replace(/,/g, '');
-        XLSX.writeFile(wb, `Expenditures_${fileNameSafePeriod}_${usernameLabel}.xlsx`);
+        const dateRangeLabel = (callDateStart || callDateEnd) 
+            ? `_${callDateStart || 'Start'}_to_${callDateEnd || 'End'}`
+            : '';
+        XLSX.writeFile(wb, `Expenditures_${fileNameSafePeriod}_${outcomeLabel}${dateRangeLabel}_${usernameLabel}.xlsx`);
     };
 
     // Navigation handlers
@@ -365,6 +399,62 @@ export default function AccountantSummary() {
                 </div>
             </div>
 
+            {/* Call Filters and Export Section */}
+            <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 mb-6">
+                {/* Call Date Range */}
+                <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-4">
+                    <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider block mb-3">
+                        <Calendar className="h-3 w-3 inline mr-1" />Call Date From
+                    </label>
+                    <input
+                        type="date"
+                        value={callDateStart}
+                        onChange={(e) => setCallDateStart(e.target.value)}
+                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-[#008cf7] focus:border-[#008cf7] text-gray-700 bg-gray-50"
+                    />
+                </div>
+
+                <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-4">
+                    <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider block mb-3">
+                        <Calendar className="h-3 w-3 inline mr-1" />Call Date To
+                    </label>
+                    <input
+                        type="date"
+                        value={callDateEnd}
+                        onChange={(e) => setCallDateEnd(e.target.value)}
+                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-[#008cf7] focus:border-[#008cf7] text-gray-700 bg-gray-50"
+                    />
+                </div>
+
+                <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-4">
+                    <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider block mb-3">
+                        <Filter className="h-3 w-3 inline mr-1" />Call Outcome
+                    </label>
+                    <select
+                        value={callOutcomeFilter}
+                        onChange={(e) => setCallOutcomeFilter(e.target.value as 'all' | 'successful' | 'service')}
+                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-[#008cf7] focus:border-[#008cf7] text-gray-700 bg-gray-50"
+                    >
+                        <option value="all">All Calls</option>
+                        <option value="successful">Successful Calls</option>
+                        <option value="service">Service Inquiry</option>
+                    </select>
+                </div>
+
+                {/* Export Button */}
+                <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl shadow-lg border-2 border-blue-200 p-4 flex flex-col justify-center">
+                    <button
+                        onClick={downloadExcel}
+                        disabled={loading || aggregateUsers.length === 0}
+                        className="flex items-center justify-center gap-2 px-4 py-2 bg-[#008cf7] hover:bg-[#006bb8] text-white font-bold rounded-lg disabled:opacity-50 transition shadow-md w-full"
+                    >
+                        <Download className="h-5 w-5" />
+                        Download Report
+                    </button>
+                    <p className="text-xs text-gray-600 mt-2 text-center">Export filtered data as Excel</p>
+                </div>
+            </div>
+
             {error ? (
                 <div className="bg-red-50 text-red-600 p-4 rounded-lg mb-6 shadow-sm border border-red-100">{error}</div>
             ) : loading ? (
@@ -379,14 +469,6 @@ export default function AccountantSummary() {
                             <Users className="h-6 w-6 text-[#008cf7]" />
                             <h2 className="text-xl font-bold text-gray-900">Personnel Utilization</h2>
                         </div>
-                        <button
-                            onClick={downloadExcel}
-                            disabled={loading || aggregateUsers.length === 0}
-                            className="flex items-center gap-2 px-5 py-2.5 bg-[#008cf7] hover:bg-[#006bb8] text-white font-medium rounded-xl disabled:opacity-50 transition shadow-md"
-                        >
-                            <Download className="h-4 w-4" />
-                            Export Excel
-                        </button>
                     </div>
 
                     {/* User Breakdown Table */}

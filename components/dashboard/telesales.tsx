@@ -129,6 +129,21 @@ export default function TelessalesRevamp() {
     staleTime: 5 * 60 * 1000,
   })
 
+  // Fetch call history for selected client
+  const { data: callHistoryData } = useQuery({
+    queryKey: ["client-call-history", selectedClient?.facilityName],
+    queryFn: async () => {
+      if (!selectedClient) return null
+      const result = await apiService.getTelesalesHistory({
+        facilityName: selectedClient.facilityName,
+        limit: 100,
+      })
+      return result
+    },
+    staleTime: 2 * 60 * 1000,
+    enabled: !!selectedClient,
+  })
+
   // ==================== Helper Functions ====================
 
   const aggregateClients = (): Client[] => {
@@ -737,6 +752,86 @@ export default function TelessalesRevamp() {
                         {new Date(activity.date).toLocaleString()}
                       </p>
                     </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Call History Section */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <History className="h-5 w-5 text-blue-600" />
+              Call History
+            </CardTitle>
+            <CardDescription>
+              {callHistoryData?.data?.length || 0} call(s) recorded for this facility
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {!callHistoryData || callHistoryData?.data?.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No call history found</p>
+            ) : (
+              <div className="space-y-4">
+                {callHistoryData.data.map((call: any, idx: number) => (
+                  <div key={call._id || idx} className="border border-gray-200 rounded-lg p-4 hover:shadow-sm transition-shadow">
+                    <div className="grid grid-cols-2 gap-4 mb-3">
+                      <div>
+                        <Label className="text-xs font-semibold text-muted-foreground">DATE & TIME</Label>
+                        <p className="mt-1 font-medium">
+                          {new Date(call.callDate).toLocaleDateString()} at {call.callTime}
+                        </p>
+                      </div>
+                      <div>
+                        <Label className="text-xs font-semibold text-muted-foreground">CALL OUTCOME</Label>
+                        <div className="mt-1">
+                          <Badge className={
+                            call.callOutcome === 'interested' ? 'bg-green-100 text-green-800' :
+                            call.callOutcome === 'sale_closed' ? 'bg-blue-100 text-blue-800' :
+                            call.callOutcome === 'follow_up_needed' ? 'bg-yellow-100 text-yellow-800' :
+                            call.callOutcome === 'no_answer' ? 'bg-gray-100 text-gray-800' :
+                            call.callOutcome === 'not_interested' ? 'bg-red-100 text-red-800' :
+                            'bg-gray-100 text-gray-800'
+                          }>
+                            {call.callOutcome?.replace(/_/g, ' ')}
+                          </Badge>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4 mb-3">
+                      <div>
+                        <Label className="text-xs font-semibold text-muted-foreground">CALLED BY</Label>
+                        <p className="mt-1 font-medium">
+                          {call.createdBy 
+                            ? `${call.createdBy.firstName} ${call.createdBy.lastName}`
+                            : 'Unknown'
+                          }
+                        </p>
+                      </div>
+                      <div>
+                        <Label className="text-xs font-semibold text-muted-foreground">CALL DIRECTION</Label>
+                        <p className="mt-1 font-medium">
+                          {call.callDirection === 'outbound' ? '📞 Outgoing' : '📱 Incoming'}
+                        </p>
+                      </div>
+                    </div>
+
+                    {call.nextAction && (
+                      <div>
+                        <Label className="text-xs font-semibold text-muted-foreground">PURPOSE / NEXT ACTION</Label>
+                        <p className="mt-1 text-sm text-gray-700">{call.nextAction}</p>
+                      </div>
+                    )}
+
+                    {call.callNotes && (
+                      <div className="mt-3 p-3 bg-gray-50 rounded">
+                        <Label className="text-xs font-semibold text-muted-foreground">NOTES</Label>
+                        <p className="mt-1 text-sm text-gray-600">{call.callNotes}</p>
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>

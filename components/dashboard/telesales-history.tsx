@@ -21,6 +21,7 @@ import {
   CheckCircle2,
   AlertCircle,
   Clock,
+  Download,
 } from "lucide-react"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
@@ -54,6 +55,8 @@ export default function TelesalesHistory() {
   const [searchQuery, setSearchQuery] = useState("")
   const [facilityFilter, setFacilityFilter] = useState("")
   const [page, setPage] = useState(1)
+  const [exportDateFrom, setExportDateFrom] = useState<string>('')
+  const [exportDateTo, setExportDateTo] = useState<string>('')
 
   // ==================== Data Fetching ====================
   const { data: callLogsData, isLoading } = useQuery({
@@ -101,6 +104,71 @@ export default function TelesalesHistory() {
 
     return filtered
   }, [callLogsData, filterOutcome, searchQuery, sortBy, sortOrder])
+
+  // ==================== Export Function ====================
+  const exportToCSV = () => {
+    // Filter by date range
+    let logsToExport = callLogs
+
+    if (exportDateFrom || exportDateTo) {
+      logsToExport = callLogs.filter(log => {
+        const logDate = new Date(log.callDate)
+        if (exportDateFrom && logDate < new Date(exportDateFrom)) return false
+        if (exportDateTo) {
+          const toDate = new Date(exportDateTo)
+          toDate.setHours(23, 59, 59, 999)
+          if (logDate > toDate) return false
+        }
+        return true
+      })
+    }
+
+    if (logsToExport.length === 0) {
+      toast({
+        title: "No data",
+        description: "No call logs to export for the selected date range",
+        variant: "destructive",
+      })
+      return
+    }
+
+    // CSV headers (removed Duration)
+    const headers = ['Client Name', 'Phone', 'Call Date', 'Call Time', 'Direction', 'Outcome', 'Notes', 'Next Action']
+
+    // CSV rows (removed duration column)
+    const csvData = logsToExport.map(log => [
+      `"${log.clientName}"`,
+      `"${log.clientPhone}"`,
+      new Date(log.callDate).toLocaleDateString(),
+      log.callTime,
+      log.callDirection === 'outbound' ? 'Outgoing' : 'Incoming',
+      log.callOutcome.replace(/_/g, ' '),
+      `"${(log.callNotes || '').replace(/"/g, '""')}"`,
+      `"${(log.nextAction || '').replace(/"/g, '""')}"`,
+    ])
+
+    // Create CSV string
+    const csvContent = [
+      headers.join(','),
+      ...csvData.map(row => row.join(','))
+    ].join('\n')
+
+    // Create and download file
+    const blob = new Blob([csvContent], { type: 'text/csv' })
+    const url = window.URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `telesales_history_${new Date().toISOString().split('T')[0]}.csv`
+    document.body.appendChild(a)
+    a.click()
+    window.URL.revokeObjectURL(url)
+    document.body.removeChild(a)
+
+    toast({
+      title: "Success",
+      description: `Exported ${callLogs.length} call records`,
+    })
+  }
 
   // ==================== Render Functions ====================
 
@@ -187,18 +255,66 @@ export default function TelesalesHistory() {
   return (
     <div className="space-y-4">
       {/* Back Button and Header */}
-      <div className="flex items-center gap-3 mb-4">
-        <Link href="/dashboard/telesales">
-          <Button variant="ghost" size="sm" className="hover:bg-gray-100">
-            <ArrowLeft className="h-4 w-4 mr-2" />
-            Back to Telesales
-          </Button>
-        </Link>
-        <div>
-          <h1 className="text-2xl font-bold">Call History</h1>
-          <p className="text-sm text-muted-foreground">View and analyze all telesales call activities</p>
+      <div className="flex items-center justify-between gap-3 mb-4">
+        <div className="flex items-center gap-3">
+          <Link href="/dashboard/telesales">
+            <Button variant="ghost" size="sm" className="hover:bg-gray-100">
+              <ArrowLeft className="h-4 w-4 mr-2" />
+              Back to Telesales
+            </Button>
+          </Link>
+          <div>
+            <h1 className="text-2xl font-bold">Call History</h1>
+            <p className="text-sm text-muted-foreground">View and analyze all telesales call activities</p>
+          </div>
         </div>
       </div>
+
+      {/* Export Date Range Filter */}
+      <Card className="border border-blue-200 bg-blue-50">
+        <CardContent className="p-3">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 items-end">
+            <div>
+              <Label className="text-xs mb-1 block font-semibold text-blue-900">Export From Date</Label>
+              <Input
+                type="date"
+                value={exportDateFrom}
+                onChange={(e) => setExportDateFrom(e.target.value)}
+                className="h-8 text-xs"
+              />
+            </div>
+            <div>
+              <Label className="text-xs mb-1 block font-semibold text-blue-900">Export To Date</Label>
+              <Input
+                type="date"
+                value={exportDateTo}
+                onChange={(e) => setExportDateTo(e.target.value)}
+                className="h-8 text-xs"
+              />
+            </div>
+            <div className="flex gap-2">
+              <Button
+                onClick={exportToCSV}
+                disabled={callLogs.length === 0}
+                className="bg-blue-600 hover:bg-blue-700 text-white gap-2 flex-1 h-8 text-xs"
+              >
+                <Download className="h-4 w-4" />
+                Download
+              </Button>
+              <Button
+                onClick={() => {
+                  setExportDateFrom('')
+                  setExportDateTo('')
+                }}
+                variant="outline"
+                className="h-8 text-xs"
+              >
+                Clear
+              </Button>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Filters and Sorting - Compact */}
       <Card className="border">
