@@ -610,7 +610,6 @@ export function EditMachineForm({ machineId, onSuccess }) {
 3. **Check Update History**:
    - Method: GET
    - URL: `http://localhost:4500/api/machines/{machineId}/history`
-
 ---
 
 ## Troubleshooting

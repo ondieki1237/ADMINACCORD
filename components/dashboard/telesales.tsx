@@ -222,7 +222,7 @@ export default function TelessalesRevamp() {
         const client = clientMap.get(key)!
         client.activityHistory.push({
           type: 'visit',
-          date: visit.date || new Date().toISOString(),
+          date: visit.date || '',
           description: `Visit - ${visit.visitPurpose || 'No purpose specified'}`,
         })
       }
@@ -275,7 +275,7 @@ export default function TelessalesRevamp() {
         const client = clientMap.get(key)!
         client.activityHistory.push({
           type: 'installation',
-          date: machine.installedDate || new Date().toISOString(),
+          date: machine.installedDate || '',
           description: `Machine Installation - ${machine.model || 'Unknown Model'}`,
         })
       }
@@ -777,8 +777,13 @@ export default function TelessalesRevamp() {
                     {client.lastActivity && (
                       <div className="flex items-center gap-2 mt-3">
                         <Calendar className="h-4 w-4" />
-                        Last Activity: {client.lastActivity.description} •{" "}
-                        {new Date(client.lastActivity.date).toLocaleDateString()}
+                        Last Activity: {client.lastActivity.description}
+                        {client.lastActivity.date && (
+                          <>
+                            {" "}•{" "}
+                            {new Date(client.lastActivity.date).toLocaleDateString()}
+                          </>
+                        )}
                       </div>
                     )}
                     {client.activityHistory.some(a => a.type === 'call') && (
@@ -953,9 +958,11 @@ export default function TelessalesRevamp() {
                     </div>
                     <div className="py-2">
                       <p className="font-medium">{activity.description}</p>
-                      <p className="text-sm text-muted-foreground">
-                        {new Date(activity.date).toLocaleString()}
-                      </p>
+                      {activity.date && (
+                        <p className="text-sm text-muted-foreground">
+                          {new Date(activity.date).toLocaleString()}
+                        </p>
+                      )}
                     </div>
                   </div>
                 ))}

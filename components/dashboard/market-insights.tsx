@@ -162,6 +162,7 @@ export default function MarketInsights() {
   });
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize] = useState(50);
+  const [isExporting, setIsExporting] = useState(false);
 
   // Calculate date range
   const dateParams = useMemo(() => {
@@ -381,30 +382,28 @@ export default function MarketInsights() {
     cutout: '60%'
   };
 
-  // Export to CSV
-  const exportToCSV = () => {
-    if (!filteredVisits.length) return;
-    
-    const headers = ["Facility", "Contact", "Role", "Phone", "Email", "Location", "Sales Person", "Date", "Outcome", "Products"];
-    const rows = filteredVisits.map(v => [
-      v.facility,
-      v.contactPerson,
-      v.contactRole,
-      v.contactPhone,
-      v.contactEmail || "",
-      v.location,
-      v.salesPerson,
-      v.date ? format(parseISO(v.date), "yyyy-MM-dd") : "",
-      v.visitOutcome,
-      v.productsOfInterest?.join("; ") || ""
-    ]);
+  // Export to Excel using API endpoint
+  const exportToExcel = async () => {
+    try {
+      setIsExporting(true);
+      const blob = await apiService.exportMarketInsightsVisits({
+        startDate: dateParams.startDate,
+        endDate: dateParams.endDate,
+        product: selectedProduct !== "all" ? selectedProduct : undefined,
+        outcome: selectedOutcome !== "all" ? selectedOutcome : undefined,
+        location: selectedLocation !== "all" ? selectedLocation : undefined
+      });
 
-    const csvContent = [headers, ...rows].map(row => row.map(cell => `"${cell}"`).join(",")).join("\n");
-    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
-    const link = document.createElement("a");
-    link.href = URL.createObjectURL(blob);
-    link.download = `market-insights-${dateParams.startDate}-to-${dateParams.endDate}.csv`;
-    link.click();
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(blob);
+      link.download = `market-insights-${dateParams.startDate}-to-${dateParams.endDate}.xlsx`;
+      link.click();
+      URL.revokeObjectURL(link.href);
+    } catch (error) {
+      console.error("Export failed:", error);
+    } finally {
+      setIsExporting(false);
+    }
   };
 
   const isLoading = summaryLoading || productsLoading || visitsLoading;
@@ -547,12 +546,12 @@ export default function MarketInsights() {
 
               <Button
                 size="sm"
-                onClick={exportToCSV}
-                disabled={!filteredVisits.length}
+                onClick={exportToExcel}
+                disabled={!filteredVisits.length || isExporting}
                 className="bg-black hover:bg-gray-800 text-white"
               >
-                <Download className="w-4 h-4 mr-2" />
-                Export CSV
+                <Download className={`w-4 h-4 mr-2 ${isExporting ? "animate-spin" : ""}`} />
+                {isExporting ? "Exporting..." : "Export Excel"}
               </Button>
             </div>
           </div>

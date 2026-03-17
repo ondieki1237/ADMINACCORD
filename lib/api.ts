@@ -1220,6 +1220,40 @@ class ApiService {
     const queryString = queryParams.toString();
     return this.makeRequest(`/admin/market-insights/summary${queryString ? `?${queryString}` : ''}`);
   }
+
+  /** Export market insights visits data as Excel file */
+  async exportMarketInsightsVisits(params?: {
+    startDate?: string;
+    endDate?: string;
+    product?: string;
+    outcome?: string;
+    location?: string;
+  }): Promise<Blob> {
+    const queryParams = new URLSearchParams();
+    if (params?.startDate) queryParams.append('startDate', params.startDate);
+    if (params?.endDate) queryParams.append('endDate', params.endDate);
+    if (params?.product) queryParams.append('product', params.product);
+    if (params?.outcome) queryParams.append('outcome', params.outcome);
+    if (params?.location) queryParams.append('location', params.location);
+    const queryString = queryParams.toString();
+    
+    let token = authService.getAccessToken();
+    const fullUrl = `${API_BASE_URL}/admin/market-insights/export/visits${queryString ? `?${queryString}` : ''}`;
+    
+    const response = await fetch(fullUrl, {
+      method: 'GET',
+      headers: {
+        ...(token && { Authorization: `Bearer ${token}` }),
+      },
+      credentials: 'include'
+    });
+    
+    if (!response.ok) {
+      throw new Error('Failed to export market insights');
+    }
+    
+    return response.blob();
+  }
 }
 
 export const apiService = new ApiService()
