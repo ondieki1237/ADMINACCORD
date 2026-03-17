@@ -605,6 +605,18 @@ class ApiService {
     return this.makeRequest(`/machines/${encodeURIComponent(machineId)}/services?${params.toString()}`);
   }
 
+  async createClient(payload: Record<string, any>): Promise<any> {
+    return this.makeRequest(`/admin/clients/`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  }
+
+  async getClients(page = 1, limit = 1000): Promise<any> {
+    const params = new URLSearchParams({ page: String(page), limit: String(limit) });
+    return this.makeRequest(`/admin/clients/?${params.toString()}`);
+  }
+
   async createMachine(payload: Record<string, any>): Promise<any> {
     return this.makeRequest(`/admin/machines`, {
       method: "POST",

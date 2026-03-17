@@ -38,16 +38,12 @@ interface MachineDocument {
 }
 
 const fetchDocuments = async (type?: "file" | "link"): Promise<MachineDocument[]> => {
-  const params = type ? { type } : {};
-  const res = await apiService.makeRequest("/machine-documents", { params });
-
+  const res = await apiService.getMachineDocuments({ type });
   return res.data ?? [];
 };
 
 const deleteDocument = async (id: string) => {
-  await apiService.makeRequest(`/machine-documents/${id}`, {
-    method: "DELETE",
-  });
+  await apiService.deleteMachineDocument(id);
 };
 
 export default function MachineDocuments() {

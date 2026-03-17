@@ -8,7 +8,7 @@ import { authService } from "@/lib/auth"
 import { hasAdminAccess } from "@/lib/permissions"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
@@ -82,6 +82,8 @@ export default function TelessalesRevamp() {
   const contentsContainerRef = useRef<HTMLDivElement>(null)
   const [isAddClientDialog, setIsAddClientDialog] = useState(false)
   const [isEditClientDialog, setIsEditClientDialog] = useState(false)
+  const [isCreateClientDialog, setIsCreateClientDialog] = useState(false)
+  const [isNewClientsViewDialog, setIsNewClientsViewDialog] = useState(false)
   const [isQuickInstallDialog, setIsQuickInstallDialog] = useState(false)
   const [isEditingMachine, setIsEditingMachine] = useState(false)
   const [isCallRecordingDialog, setIsCallRecordingDialog] = useState(false)
@@ -122,7 +124,7 @@ export default function TelessalesRevamp() {
     status: "active",
   })
 
-  // Quick install form state
+  // New client form state
   const [quickInstallForm, setQuickInstallForm] = useState({
     facilityName: "",
     location: "",
@@ -133,6 +135,15 @@ export default function TelessalesRevamp() {
     machineName: "",
     serialNumber: "",
     manufacturer: "",
+  })
+
+  // Client without machine form state
+  const [newClientForm, setNewClientForm] = useState({
+    facilityName: "",
+    location: "",
+    contactPerson: "",
+    phoneNumber: "",
+    role: "",
   })
 
   // Call recording form state
@@ -162,6 +173,16 @@ export default function TelessalesRevamp() {
     queryKey: ["telesales-machines"],
     queryFn: async () => {
       const result = await apiService.getMachines(1, 1000)
+      return result
+    },
+    staleTime: 5 * 60 * 1000,
+  })
+
+  // Fetch clients (prospects)
+  const { data: clientsData } = useQuery({
+    queryKey: ["telesales-clients"],
+    queryFn: async () => {
+      const result = await apiService.getClients(1, 1000)
       return result
     },
     staleTime: 5 * 60 * 1000,
@@ -281,6 +302,46 @@ export default function TelessalesRevamp() {
       }
     })
 
+    // Parse clients (prospects) from /api/admin/clients endpoint
+    // Handle different response structures: data.docs or just data
+    let clientsArray = []
+    
+    if (Array.isArray(clientsData?.data?.docs)) {
+      clientsArray = clientsData.data.docs.filter(c => c != null)
+    } else if (Array.isArray(clientsData?.data)) {
+      clientsArray = clientsData.data.filter(c => c != null)
+    } else if (Array.isArray(clientsData)) {
+      clientsArray = clientsData.filter(c => c != null)
+    }
+
+    clientsArray.forEach((client: any) => {
+      if (!client || !client.name) return
+      
+      const facilityName = client.name
+      const location = client.location || "Unknown Location"
+      const key = `${facilityName}-${location}`
+      
+      if (!clientMap.has(key)) {
+        clientMap.set(key, {
+          id: `client-${client._id || 'unknown'}`,
+          facilityName,
+          location,
+          machineInstalled: false,
+          contactPerson: client.contactPerson && client.contactPerson.name ? {
+            name: client.contactPerson.name || "Unknown",
+            role: client.contactPerson.role || "Contact",
+            phone: client.contactPerson.phone || "",
+          } : undefined,
+          activityHistory: [{
+            type: 'visit',
+            date: client.createdAt || '',
+            description: 'Client created',
+          }],
+          source: 'manual',
+        })
+      }
+    })
+
     // Set last activity and sort history
     const clients = Array.from(clientMap.values())
     clients.forEach((client) => {
@@ -291,7 +352,7 @@ export default function TelessalesRevamp() {
     return clients
   }
 
-  const allClients = useMemo(() => aggregateClients(), [visitsData, machinesData])
+  const allClients = useMemo(() => aggregateClients(), [visitsData, machinesData, clientsData])
 
   const filteredClients = useMemo(() => {
     return allClients.filter((client) => {
@@ -352,28 +413,27 @@ export default function TelessalesRevamp() {
 
   const addClientMutation = useMutation({
     mutationFn: async (data: typeof addClientForm) => {
-      // This would typically create a new client in the database
-      // For now, we'll just add it to the local list
-      const newClient: Client = {
-        id: `manual-${Date.now()}`,
-        facilityName: data.facilityName,
-        location: data.location,
-        machineInstalled: data.machineInstalled,
-        contactPerson: {
-          name: data.contactPersonName,
-          role: data.contactPersonRole,
-          phone: data.contactPersonPhone,
+      // Create a visit record in the database to register the new client
+      const visitPayload = {
+        date: new Date().toISOString(),
+        startTime: new Date().toLocaleTimeString(),
+        client: {
+          name: data.facilityName,
+          type: 'other',
+          location: data.location,
         },
-        activityHistory: [
+        visitPurpose: 'Client registration',
+        contacts: [
           {
-            type: 'call',
-            date: new Date().toISOString(),
-            description: 'Client added to system',
+            name: data.contactPersonName,
+            role: data.contactPersonRole,
           }
         ],
-        source: 'manual',
       }
-      return newClient
+      
+      // Save to database via API
+      const result = await apiService.createVisit(visitPayload)
+      return result
     },
     onSuccess: () => {
       toast({
@@ -392,10 +452,10 @@ export default function TelessalesRevamp() {
       qc.invalidateQueries({ queryKey: ["telesales-visits"] })
       qc.invalidateQueries({ queryKey: ["telesales-machines"] })
     },
-    onError: () => {
+    onError: (error: any) => {
       toast({
         title: "Error",
-        description: "Failed to add client",
+        description: error.message || "Failed to add client",
         variant: "destructive",
       })
     },
@@ -572,25 +632,28 @@ export default function TelessalesRevamp() {
   const quickInstallMutation = useMutation({
     mutationFn: async (data: any) => {
       const payload = {
-        facilityName: data.facilityName,
-        location: data.location,
-        contactPerson: data.contactPerson,
-        phoneNumber: data.phoneNumber,
-        role: data.role,
-        machineInstalled: data.machineInstalled,
+        facility: {
+          name: data.facilityName,
+          location: data.location,
+        },
+        contactPerson: {
+          name: data.contactPerson,
+          phone: data.phoneNumber,
+          role: data.role,
+        },
       }
 
       // Add machine details if installing a machine
       if (data.machineInstalled) {
         Object.assign(payload, {
-          machineName: data.machineName,
+          model: data.machineName,
           serialNumber: data.serialNumber,
           manufacturer: data.manufacturer,
         })
       }
 
-      // Call the API endpoint
-      const result = await apiService.quickInstallMachine(payload)
+      // Call the API endpoint to create a machine (which also creates the facility/client)
+      const result = await apiService.createMachine(payload)
 
       return result
     },
@@ -598,8 +661,8 @@ export default function TelessalesRevamp() {
       toast({
         title: "Success",
         description: quickInstallForm.machineInstalled
-          ? "Facility registered and machine installed successfully!"
-          : "Facility registered successfully!",
+          ? "Client and machine created successfully!"
+          : "Client created successfully!",
       })
 
       // Reset form
@@ -624,7 +687,55 @@ export default function TelessalesRevamp() {
     onError: (error: any) => {
       toast({
         title: "Error",
-        description: error.message || "Failed to register facility",
+        description: error.message || "Failed to create client",
+        variant: "destructive",
+      })
+    },
+  })
+
+  const createClientMutation = useMutation({
+    mutationFn: async (data: any) => {
+      const payload = {
+        facility: {
+          name: data.facilityName,
+          location: data.location,
+        },
+        contactPerson: {
+          name: data.contactPerson,
+          phone: data.phoneNumber,
+          role: data.role || "Contact",
+        },
+      }
+
+      const result = await apiService.createClient(payload)
+      return result
+    },
+    onSuccess: (result: any) => {
+      toast({
+        title: "Success",
+        description: "New client created successfully!",
+      })
+
+      // Reset form
+      setNewClientForm({
+        facilityName: "",
+        location: "",
+        contactPerson: "",
+        phoneNumber: "",
+        role: "",
+      })
+
+      setIsCreateClientDialog(false)
+
+      // Refresh the data
+      qc.invalidateQueries({ queryKey: ["telesales-machines"] })
+      qc.invalidateQueries({ queryKey: ["telesales-visits"] })
+      qc.invalidateQueries({ queryKey: ["telesales-clients"] })
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to create client",
         variant: "destructive",
       })
     },
@@ -1111,10 +1222,24 @@ export default function TelessalesRevamp() {
           </Button>
           <Button
             onClick={() => setIsQuickInstallDialog(true)}
+            className="bg-blue-600 hover:bg-blue-700"
+          >
+            <Plus className="mr-2 h-4 w-4" />
+            New Machine
+          </Button>
+          <Button
+            onClick={() => setIsCreateClientDialog(true)}
             className="bg-green-600 hover:bg-green-700"
           >
             <Plus className="mr-2 h-4 w-4" />
-            Quick Register & Install
+            Client Prospect
+          </Button>
+          <Button
+            onClick={() => setIsNewClientsViewDialog(true)}
+            variant="outline"
+          >
+            <User className="mr-2 h-4 w-4" />
+            New Clients List
           </Button>
         </div>
       </div>
@@ -1400,11 +1525,11 @@ export default function TelessalesRevamp() {
         </DialogContent>
       </Dialog>
 
-      {/* Quick Register & Install Dialog */}
+      {/* New Machine Dialog */}
       <Dialog open={isQuickInstallDialog} onOpenChange={setIsQuickInstallDialog}>
         <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Quick Register Facility & Install Machine</DialogTitle>
+            <DialogTitle>New Machine</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
             {/* Facility Information */}
@@ -1537,6 +1662,182 @@ export default function TelessalesRevamp() {
               }
             >
               {quickInstallMutation.isPending ? "Registering..." : "Register Facility"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Create Client (Prospect) Dialog */}
+      <Dialog open={isCreateClientDialog} onOpenChange={setIsCreateClientDialog}>
+        <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Add Client Prospect</DialogTitle>
+            <DialogDescription>Create a new client prospect without machine installation</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            {/* Facility Information */}
+            <div className="border-b pb-4">
+              <h3 className="font-semibold text-sm mb-3">Facility Information</h3>
+              <div className="space-y-3">
+                <div>
+                  <Label htmlFor="new-facility-name">Facility Name *</Label>
+                  <Input
+                    id="new-facility-name"
+                    placeholder="Hospital/Clinic name"
+                    value={newClientForm.facilityName}
+                    onChange={(e) => setNewClientForm({...newClientForm, facilityName: e.target.value})}
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="new-location">Location</Label>
+                  <Input
+                    id="new-location"
+                    placeholder="City/Address"
+                    value={newClientForm.location}
+                    onChange={(e) => setNewClientForm({...newClientForm, location: e.target.value})}
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Contact Information */}
+            <div>
+              <h3 className="font-semibold text-sm mb-3">Contact Person</h3>
+              <div className="space-y-3">
+                <div>
+                  <Label htmlFor="new-contact-person">Contact Name *</Label>
+                  <Input
+                    id="new-contact-person"
+                    placeholder="Person name"
+                    value={newClientForm.contactPerson}
+                    onChange={(e) => setNewClientForm({...newClientForm, contactPerson: e.target.value})}
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="new-phone">Phone Number *</Label>
+                  <Input
+                    id="new-phone"
+                    placeholder="+254-700-000000"
+                    value={newClientForm.phoneNumber}
+                    onChange={(e) => setNewClientForm({...newClientForm, phoneNumber: e.target.value})}
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="new-role">Role</Label>
+                  <Input
+                    id="new-role"
+                    placeholder="Facility Manager, Doctor, etc."
+                    value={newClientForm.role}
+                    onChange={(e) => setNewClientForm({...newClientForm, role: e.target.value})}
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setIsCreateClientDialog(false)}
+              disabled={createClientMutation.isPending}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={() => createClientMutation.mutate(newClientForm)}
+              className="bg-green-600 hover:bg-green-700"
+              disabled={
+                !newClientForm.facilityName ||
+                !newClientForm.contactPerson ||
+                !newClientForm.phoneNumber ||
+                createClientMutation.isPending
+              }
+            >
+              {createClientMutation.isPending ? "Creating..." : "Create Client"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* New Clients List Dialog */}
+      <Dialog open={isNewClientsViewDialog} onOpenChange={setIsNewClientsViewDialog}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Clients Without Machines</DialogTitle>
+            <DialogDescription>Prospects and clients without active machine installations</DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4">
+            {(() => {
+              const newClients = allClients.filter(c => !c.machineInstalled && c.source !== 'visit')
+              
+              if (newClients.length === 0) {
+                return (
+                  <div className="text-center py-8">
+                    <AlertCircle className="h-8 w-8 text-gray-300 mx-auto mb-2" />
+                    <p className="text-sm text-gray-500">No clients without machines found</p>
+                  </div>
+                )
+              }
+
+              return (
+                <div className="space-y-3">
+                  {newClients.map((client) => (
+                    <div
+                      key={client.id}
+                      className="border rounded-lg p-4 space-y-2 hover:bg-gray-50 cursor-pointer"
+                      onClick={() => {
+                        setSelectedClient(client)
+                        setIsNewClientsViewDialog(false)
+                      }}
+                    >
+                      <div className="flex items-start justify-between">
+                        <div>
+                          <h4 className="font-semibold text-sm">{client.facilityName}</h4>
+                          <div className="flex items-center gap-2 mt-1">
+                            <MapPin className="h-3 w-3 text-gray-400" />
+                            <p className="text-xs text-gray-500">{client.location}</p>
+                          </div>
+                        </div>
+                        <Badge variant="outline" className="bg-blue-50">
+                          Prospect
+                        </Badge>
+                      </div>
+
+                      {client.contactPerson && (
+                        <div className="text-xs text-gray-600 space-y-1">
+                          <div className="flex items-center gap-2">
+                            <User className="h-3 w-3" />
+                            {client.contactPerson.name}
+                            {client.contactPerson.role && ` - ${client.contactPerson.role}`}
+                          </div>
+                          {client.contactPerson.phone && (
+                            <div className="flex items-center gap-2">
+                              <Phone className="h-3 w-3" />
+                              {client.contactPerson.phone}
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {client.lastActivity && (
+                        <div className="text-xs text-gray-500 pt-2 border-t">
+                          Last activity: {new Date(client.lastActivity.date).toLocaleDateString()}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )
+            })()}
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setIsNewClientsViewDialog(false)}
+            >
+              Close
             </Button>
           </DialogFooter>
         </DialogContent>
